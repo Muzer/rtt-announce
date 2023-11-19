@@ -406,7 +406,7 @@ chime = true
 this_is = true
 
 # Announce platform alterations.
-platform_alterations = true
+platform_alterations = false
 
 # Announce the TOC in platform alterations. Alternative is Chiltern-style, to
 # just say "service to".
