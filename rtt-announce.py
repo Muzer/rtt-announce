@@ -3210,6 +3210,10 @@ def announce_arrival_platform_alteration(
         wavplayer
     )
 
+    if config["general"]["voice"] != "Female2":
+        time.sleep(0.7)
+        wavplayer.play_wav("w/this train will terminate here.wav")
+
     # after playing an announcement we want a gap to the next one
     time.sleep(config["general"]["announcement_delay"])
 
