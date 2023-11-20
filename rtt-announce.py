@@ -1319,6 +1319,11 @@ def should_announce_departure_delay(
     )
     if service["locationDetail"].get("realtimeDepartureNoReport"):
         realtime_dep_actual = True
+    realtime_arr_actual = (
+        service["locationDetail"].get("realtimeArrivalActual")
+    )
+    if service["locationDetail"].get("realtimeArrivalNoReport"):
+        realtime_arr_actual = True
 
     now_to_booked = time_diff(booked_hour, booked_minute, now)
 
@@ -1398,6 +1403,10 @@ def should_announce_departure_delay(
             -now_to_booked <= config["departures_delay"]["minutes_after"]
         ) and
         not service_location and
+        (
+            not realtime_arr_actual or
+            not config["announcements_enabled"]["departures_trust_triggered"]
+        ) and
         not realtime_dep_actual and
         service_type == "train"
     )
