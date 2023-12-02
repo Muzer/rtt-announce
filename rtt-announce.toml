@@ -117,7 +117,7 @@ departures_platform_alteration = true
 arrivals_delay = true
 arrivals_platform_alteration = true
 
-# Perform general safety announcements. Not yet implemented.
+# Perform general safety announcements.
 safety = true
 
 [departures_next_train]
