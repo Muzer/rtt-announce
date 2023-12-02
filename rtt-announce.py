@@ -2898,6 +2898,7 @@ def announce_departure_bus(
             wavplayer.play_wav(f"station/m/{calling_points[-2]}.wav")
             time.sleep(0.1)
             wavplayer.play_wav("m/and.wav")
+            time.sleep(0.1)
             wavplayer.play_wav(f"station/m/{calling_points[-1]}.wav")
         if config["general"]["voice"] == "Female2": # this is the best I can do
             wavplayer.play_wav(
@@ -2926,6 +2927,7 @@ def announce_destinations(
         if i == len(destinations) - 2:
             time.sleep(0.1)
             wavplayer.play_wav("m/and.wav")
+            time.sleep(0.1)
         elif i < len(destinations) - 2:
             time.sleep(0.3)
 
@@ -3613,6 +3615,7 @@ def announce_calling_points(
             wavplayer.play_wav(f"station/m/{calling_points[-2]}.wav")
             time.sleep(0.1)
             wavplayer.play_wav("m/and.wav")
+            time.sleep(0.1)
             if division["divides"]:
                 wavplayer.play_wav(f"station/m/{calling_points[-1]}.wav")
             else:
@@ -3643,6 +3646,7 @@ def announce_calling_points(
                     )
                     time.sleep(0.1)
                     wavplayer.play_wav("m/and.wav")
+                    time.sleep(0.1)
                     wavplayer.play_wav(
                         f"station/m/{portion_calling_points[-1]}.wav"
                     )
@@ -3668,6 +3672,7 @@ def announce_calling_points(
             wavplayer.play_wav(f"station/m/{cancelled_calling_points[-2]}.wav")
             time.sleep(0.1)
             wavplayer.play_wav("m/and.wav")
+            time.sleep(0.1)
             wavplayer.play_wav(f"station/m/{cancelled_calling_points[-1]}.wav")
         if config["general"]["voice"] != "Female2":
             wavplayer.play_wav("e/today.wav")
