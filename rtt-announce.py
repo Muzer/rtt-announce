@@ -2162,9 +2162,9 @@ def handle_divisions(
     uids_seen: set[str],
     all_calling_points: dict,
     trains_to_check: list[tuple]
-) -> typing.Optional[list[str]]:
+) -> tuple[typing.Optional[list[str]], typing.Optional[str]]:
     list_to_write = None
-    another_division = False
+    later_cancel_reason = None
     if (
         "associations" in location and
         location["displayAs"] != "ORIGIN"
@@ -2178,8 +2178,37 @@ def handle_divisions(
                 if uid in uids_seen:
                     continue
 
+                uids_seen.add(uid)
+                dividing_train_content = fetch_train_content_by_uid(
+                    config,
+                    uid,
+                    assoc["associatedRunDate"]
+                )
+
+                if config["general"]["debug"]:
+                    pp = pprint.PrettyPrinter(indent=4)
+                    pp.pprint(dividing_train_content)
+
+                # We now need to check that the new train is not cancelled
+                if (
+                    dividing_train_content["locations"][0]["displayAs"] ==
+                    "CANCELLED_CALL"
+                ):
+                    print("Doesn't divide, is actually cancelled")
+                    trains_to_check.append((
+                        dividing_train_content,
+                        all_calling_points["cancelled"],
+                        DIVIDING_PORTION,
+                        True
+                    ))
+                    later_cancel_reason = (
+                        dividing_train_content["locations"][0].get(
+                            "cancelReasonCode"
+                        )
+                    )
+                    continue
+
                 assoc_list_to_write = all_calling_points["rear"]
-                another_division = True
                 if divides:
                     # in this case, the front portion divides
                     # again so we are still the front, we now
@@ -2214,24 +2243,14 @@ def handle_divisions(
 
                 divides = True
 
-                uids_seen.add(uid)
-                dividing_train_content = fetch_train_content_by_uid(
-                    config,
-                    uid,
-                    assoc["associatedRunDate"]
-                )
-
-                if config["general"]["debug"]:
-                    pp = pprint.PrettyPrinter(indent=4)
-                    pp.pprint(dividing_train_content)
-
                 trains_to_check.append((
                     dividing_train_content,
                     assoc_list_to_write,
-                    DIVIDING_PORTION
+                    DIVIDING_PORTION,
+                    False
                 ))
 
-    return list_to_write
+    return list_to_write, later_cancel_reason
 
 
 def handle_pre_attachments(
@@ -2270,7 +2289,8 @@ def handle_pre_attachments(
                 trains_to_check.append((
                     joining_train_content,
                     None,
-                    JOINING_PORTION
+                    JOINING_PORTION,
+                    False
                 ))
 
                 done_pre_attachment = True
@@ -2330,7 +2350,8 @@ def handle_main_train_attachments(
                 trains_to_check.append((
                     joining_train_content,
                     list_to_write,
-                    JOINING_MAIN_TRAIN
+                    JOINING_MAIN_TRAIN,
+                    False
                 ))
 
                 joins_main_train = True
@@ -2361,21 +2382,25 @@ def calculate_calling_points(
         "front": []
     }
 
-    later_cancelled = False
     later_cancel_reason = None
 
     destinations = []
     origins = []
 
     trains_to_check = [
-        (train_content, all_calling_points["whole_train"], ORIGINAL)
+        (train_content, all_calling_points["whole_train"], ORIGINAL, False)
     ]
 
     uids_seen = {uid}
 
     new_list_to_write = None
 
-    for train_to_check, list_to_write, what in trains_to_check:
+    for (
+        train_to_check,
+        list_to_write,
+        what,
+        later_cancelled
+    ) in trains_to_check:
         # we need to always skip writing the first location even though we
         # should apply the rest of the logic to it
         if what == JOINING_MAIN_TRAIN:
@@ -2417,15 +2442,19 @@ def calculate_calling_points(
             ):
                 reached_home = True
                 if not later_cancelled:
-                    division_list_to_write = handle_divisions(
-                        config,
-                        location,
-                        what,
-                        divides,
-                        uids_seen,
-                        all_calling_points,
-                        trains_to_check
+                    division_list_to_write, new_later_cancel_reason = (
+                        handle_divisions(
+                            config,
+                            location,
+                            what,
+                            divides,
+                            uids_seen,
+                            all_calling_points,
+                            trains_to_check
+                        )
                     )
+                    if new_later_cancel_reason:
+                        later_cancel_reason = new_later_cancel_reason
                     if division_list_to_write is not None:
                         list_to_write = division_list_to_write
                         divides = True
@@ -2482,15 +2511,19 @@ def calculate_calling_points(
                 joins_main_train = True
 
             if not later_cancelled:
-                division_list_to_write = handle_divisions(
-                    config,
-                    location,
-                    what,
-                    divides,
-                    uids_seen,
-                    all_calling_points,
-                    trains_to_check
+                division_list_to_write, new_later_cancel_reason = (
+                    handle_divisions(
+                        config,
+                        location,
+                        what,
+                        divides,
+                        uids_seen,
+                        all_calling_points,
+                        trains_to_check
+                    )
                 )
+                if new_later_cancel_reason:
+                    later_cancel_reason = new_later_cancel_reason
                 if division_list_to_write is not None:
                     list_to_write = division_list_to_write
                     divides = True
