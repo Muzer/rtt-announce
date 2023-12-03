@@ -2630,7 +2630,7 @@ def announce_cancellation(
     play_chime(config, config["cancellation"], wavplayer)
 
     if config["cancellation"]["apologise_before"]:
-        wavplayer.play_wav("s/were sorry to announce that the-2.wav")
+        wavplayer.play_wav("s/were sorry to announce that the.wav")
     else:
         wavplayer.play_wav("s/the.wav")
     announce_time_and_toc(
@@ -2661,7 +2661,7 @@ def announce_cancellation(
         if config["cancellation"]["please_listen_reason"]:
             time.sleep(0.7)
             wavplayer.play_wav(
-                "w/please listen for further announcements-2.wav"
+                "w/please listen for further announcements.wav"
             )
     else:
         wavplayer.play_wav("e/has been cancelled.wav")
@@ -2673,7 +2673,7 @@ def announce_cancellation(
         if config["cancellation"]["please_listen_no_reason"]:
             time.sleep(0.7)
             wavplayer.play_wav(
-                "w/please listen for further announcements-2.wav"
+                "w/please listen for further announcements.wav"
             )
 
     if config["cancellation"]["apologise_after"]:
@@ -2768,7 +2768,7 @@ def announce_departure_delay(
         config["departures_delay"]["apologise_before_threshold"] > -1 and
         delay >= config["departures_delay"]["apologise_before_threshold"]
     ):
-        wavplayer.play_wav("s/were sorry to announce that the-2.wav")
+        wavplayer.play_wav("s/were sorry to announce that the.wav")
     else:
         wavplayer.play_wav("s/the.wav")
     announce_time_and_toc(
@@ -2786,7 +2786,7 @@ def announce_departure_delay(
 
     if config["departures_delay"]["please_listen_no_reason"]:
         time.sleep(0.7)
-        wavplayer.play_wav("w/please listen for further announcements-2.wav")
+        wavplayer.play_wav("w/please listen for further announcements.wav")
 
     if (
         config["departures_delay"][
@@ -2845,7 +2845,7 @@ def announce_arrival_delay(
         config["arrivals_delay"]["apologise_before_threshold"] > -1 and
         delay >= config["arrivals_delay"]["apologise_before_threshold"]
     ):
-        wavplayer.play_wav("s/were sorry to announce that the-2.wav")
+        wavplayer.play_wav("s/were sorry to announce that the.wav")
     else:
         wavplayer.play_wav("s/the.wav")
     announce_time_and_toc(
@@ -2869,7 +2869,7 @@ def announce_arrival_delay(
 
     if config["arrivals_delay"]["please_listen_no_reason"]:
         time.sleep(0.7)
-        wavplayer.play_wav("w/please listen for further announcements-2.wav")
+        wavplayer.play_wav("w/please listen for further announcements.wav")
 
     if (
         config["arrivals_delay"][
