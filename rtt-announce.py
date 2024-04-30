@@ -2189,6 +2189,10 @@ def handle_divisions(
                     pp = pprint.PrettyPrinter(indent=4)
                     pp.pprint(dividing_train_content)
 
+                # Possible with some divide-to-ECS
+                if "locations" not in dividing_train_content:
+                    continue
+
                 # We now need to check that the new train is not cancelled
                 if (
                     dividing_train_content["locations"][0]["displayAs"] ==
@@ -2331,6 +2335,10 @@ def handle_main_train_attachments(
                 if config["general"]["debug"]:
                     pp = pprint.PrettyPrinter(indent=4)
                     pp.pprint(joining_train_content)
+
+                # Possible with some divide-to-ECS
+                if "locations" not in joining_train_content:
+                    continue
 
                 # We need to check if the joining train also terminates here,
                 # as we might have the wrong one.
