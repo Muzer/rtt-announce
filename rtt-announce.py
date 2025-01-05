@@ -145,43 +145,32 @@ toc_map = {
 
 station_map = {
     "Male1": {
-        "GIL": "GIL-3",
-        "YVJ": "YVJ-2",
         "CDN": "CDN - Smitham",
         "SDC": "SDC - Shoreditch",
         "BIT": "BIT - Bicester Town",
         "BUI": "BUI - Strathclyde",
         "CLT": "CLT - Clacton",
         "DFE": "DFE - Dunfermline",
-        "AFS": "AFS - Middlesex",
         "GSC": "GSC - Lambhill",
         #"HXX": "HXX - Heathrow Airport", # Now have specific one for T2,3
         "LUA": "LUA - London Luton Airport",
-        "SAD": "SAD-2",
         "SOF": "SOF - Woodham Ferrers",
         "WAV": "WAV - Wavertree",
         "WCF": "WCF - on sea",
-        "HYL": "HAL",
         "COE": "CME",
-        "CPN": "CLN-2",
     },
     "Female1": {
-        "GIL": "GIL-2",
-        "YVJ": "YVJ-2",
         "CDN": "CDN - Smitham",
         "SDC": "SDC - Shoreditch",
         "BIT": "BIT - Bicester Town",
         "CLT": "CLT - Clacton",
         "DFE": "DFE - Dunfermline",
-        "AFS": "AFS - Middlesex",
         "GSC": "GSC - Lambhill",
         "HXX": "HXX - Heathrow Airport",
         "LUA": "LUA - London Luton Airport",
         "SOF": "SOF - Woodham Ferrers",
         "WCF": "WCF - on sea",
-        "HYL": "HAL",
         "COE": "CME",
-        "CPN": "CLN-2",
     },
     "Female2": {
         "CDB": "CDB - Cardiff Bute Road",
@@ -2667,7 +2656,7 @@ def announce_cancellation(
     if cancel_reason in cancel_map[config["general"]["voice"]]:
         if config["general"]["voice"] == "Female2":
             wavplayer.play_wav("e/has been cancelled.wav")
-            wavplayer.play_wav("m/due to.wav")
+            wavplayer.play_wav("m/due to (old).wav")
         else:
             wavplayer.play_wav("m/has been cancelled due to.wav")
         announce_cancel_reason(config, cancel_reason, wavplayer)
@@ -2798,7 +2787,7 @@ def announce_departure_delay(
     )
     announce_destinations(destinations, False, wavplayer)
     if (delay + 1) < (-now_to_booked):
-        wavplayer.play_wav("e/is being delayed.wav")
+        wavplayer.play_wav("e/is being delayed (old).wav")
     else:
         announce_delay_time(config, delay, wavplayer)
 
@@ -2877,7 +2866,7 @@ def announce_arrival_delay(
     )
     announce_destinations(origins, False, wavplayer)
     if (delay + 1) < (-now_to_booked):
-        wavplayer.play_wav("e/is being delayed.wav")
+        wavplayer.play_wav("e/is being delayed (old).wav")
     else:
         announce_delay_time(config, delay, wavplayer)
 
@@ -3028,7 +3017,9 @@ def announce_platform_number(
                 style = "m"
             wavplayer.play_wav(f"{style}/0.wav")
             if str(plat_int) != platform:
-                wavplayer.play_wav(f"{letter_style}/{plat_letter}.wav")
+                wavplayer.play_wav(
+                    f"platform/{letter_style}/{plat_letter}.wav"
+                )
     elif plat_int < 21:
         if (
             plat_int <= 12 and
@@ -3038,14 +3029,18 @@ def announce_platform_number(
         else:
             wavplayer.play_wav(f"platform/{style}/{plat_int}.wav")
             if config["general"]["voice"] != "Female2":
-                wavplayer.play_wav(f"{letter_style}/{plat_letter}.wav")
+                wavplayer.play_wav(
+                    f"platform/{letter_style}/{plat_letter}.wav"
+                )
     else:
         if str(plat_int) == platform:
             wavplayer.play_wav(f"mins/{style}/{platform}.wav")
         else:
             wavplayer.play_wav(f"mins/{style}/{platform}.wav")
             if config["general"]["voice"] != "Female2":
-                wavplayer.play_wav(f"{letter_style}/{plat_letter}.wav")
+                wavplayer.play_wav(
+                    f"platform/{letter_style}/{plat_letter}.wav"
+                )
 
 
 def announce_time_and_toc(
@@ -3119,7 +3114,7 @@ def announce_departure_platform_alteration_intro(
     wavplayer: WavPlayer
 ) -> None:
     if announce_attention:
-        wavplayer.play_wav("s/attention please.wav")
+        wavplayer.play_wav("w/attention please.wav")
         time.sleep(0.7)
         wavplayer.play_wav("w/this is a platform alteration.wav")
         time.sleep(0.7)
@@ -3151,7 +3146,7 @@ def announce_arrival_platform_alteration_intro(
     wavplayer: WavPlayer
 ) -> None:
     if announce_attention:
-        wavplayer.play_wav("s/attention please.wav")
+        wavplayer.play_wav("w/attention please.wav")
         time.sleep(0.7)
         wavplayer.play_wav("w/this is a platform alteration.wav")
         time.sleep(0.7)
@@ -3328,7 +3323,7 @@ def announce_realtime_arrival_next_train_intro(
         wavplayer.play_wav("e/terminates here.wav")
         if config["arrivals_next_train"]["service_from"]:
             time.sleep(0.7)
-            wavplayer.play_wav("s/this train is the service from-2.wav")
+            wavplayer.play_wav("s/this train is the service from.wav")
             announce_destinations(origins, True, wavplayer)
     else:
         if to_arrive:
@@ -3340,7 +3335,7 @@ def announce_realtime_arrival_next_train_intro(
             wavplayer.play_wav("w/the next train terminates here.wav")
         if config["arrivals_next_train"]["service_from"]:
             time.sleep(0.7)
-            wavplayer.play_wav("s/this train is the service from-2.wav")
+            wavplayer.play_wav("s/this train is the service from.wav")
             announce_destinations(origins, True, wavplayer)
 
 
@@ -3388,13 +3383,13 @@ def announce_realtime_arrival_trust_triggered_intro(
         wavplayer.play_wav("e/terminates here.wav")
         if config["arrivals_trust_triggered"]["service_from"]:
             time.sleep(0.7)
-            wavplayer.play_wav("s/this train is the service from-2.wav")
+            wavplayer.play_wav("s/this train is the service from.wav")
             announce_destinations(origins, True, wavplayer)
     else:
         wavplayer.play_wav("w/the next train terminates here.wav")
         if config["arrivals_trust_triggered"]["service_from"]:
             time.sleep(0.7)
-            wavplayer.play_wav("s/this train is the service from-2.wav")
+            wavplayer.play_wav("s/this train is the service from.wav")
             announce_destinations(origins, True, wavplayer)
 
 
@@ -3441,13 +3436,13 @@ def announce_realtime_arrival_now_approaching_intro(
         wavplayer.play_wav("e/terminates here.wav")
         if config["arrivals_now_approaching"]["service_from"]:
             time.sleep(0.7)
-            wavplayer.play_wav("s/this train is the service from-2.wav")
+            wavplayer.play_wav("s/this train is the service from.wav")
             announce_destinations(origins, True, wavplayer)
     else:
         wavplayer.play_wav("s/the train now approaching terminates here.wav")
         if config["arrivals_now_approaching"]["service_from"]:
             time.sleep(0.7)
-            wavplayer.play_wav("s/this train is the service from-2.wav")
+            wavplayer.play_wav("s/this train is the service from.wav")
             announce_destinations(origins, True, wavplayer)
 
 
@@ -3517,7 +3512,7 @@ def announce_realtime_arrival_now_standing_intro(
         wavplayer.play_wav("e/terminates here.wav")
         if config["arrivals_now_standing"]["service_from"]:
             time.sleep(0.7)
-            wavplayer.play_wav("s/this train is the service from-2.wav")
+            wavplayer.play_wav("s/this train is the service from.wav")
             announce_destinations(origins, True, wavplayer)
 
     else:
@@ -3526,7 +3521,7 @@ def announce_realtime_arrival_now_standing_intro(
         )
         if config["arrivals_now_standing"]["service_from"]:
             time.sleep(0.7)
-            wavplayer.play_wav("s/this train is the service from-2.wav")
+            wavplayer.play_wav("s/this train is the service from.wav")
             announce_destinations(origins, True, wavplayer)
 
 
@@ -3729,7 +3724,7 @@ def announce_calling_points(
             wavplayer.play_wav("e/today.wav")
         if later_cancel_reason in cancel_map[config["general"]["voice"]]:
             if config["general"]["voice"] == "Female2":
-                wavplayer.play_wav("m/due to.wav")
+                wavplayer.play_wav("m/due to (old).wav")
             else:
                 time.sleep(0.7)
                 wavplayer.play_wav("s/this is due to.wav")
@@ -4126,7 +4121,7 @@ def announce_realtime_departure_generic(
             wavplayer.play_wav("m/is the.wav")
             wavplayer.play_wav("m/service from.wav")
         else:
-            wavplayer.play_wav("s/this train is the service from-2.wav")
+            wavplayer.play_wav("s/this train is the service from.wav")
         announce_destinations(origins, True, wavplayer)
 
     if sub_config["mind_the_gap"]:
@@ -4320,11 +4315,11 @@ def announce_cases_and_parcels(
     config: dict,
     wavplayer: WavPlayer
 ) -> None:
-    wavplayer.play_wav("m/please do not leave cases or parcels.wav")
-    wavplayer.play_wav("m/unattended anywhere on the station.wav")
+    wavplayer.play_wav("s/please do not leave cases or parcels.wav")
+    wavplayer.play_wav("e/unattended anywhere on the station.wav")
     time.sleep(0.35)
     wavplayer.play_wav(
-        "m/any unattended articles are likely to be removed.wav"
+        "s/any unattended articles are likely to be removed.wav"
     )
     wavplayer.play_wav("e/without warning.wav")
 
