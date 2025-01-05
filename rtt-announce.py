@@ -54,7 +54,7 @@ toc_map = {
         "VT": ("virgin trains", True), # TODO
         "WR": ("west coast railway company", True),
         "XC": ("crosscountry", True),
-        # XR TODO
+        "XR": ("elizabeth line", True), # TODO improve
         # YG TODO
     },
     "Female1": {
@@ -155,12 +155,15 @@ station_map = {
         "DFE": "DFE - Dunfermline",
         "AFS": "AFS - Middlesex",
         "GSC": "GSC - Lambhill",
-        "HXX": "HXX - Heathrow Airport",
+        #"HXX": "HXX - Heathrow Airport", # Now have specific one for T2,3
         "LUA": "LUA - London Luton Airport",
         "SAD": "SAD-2",
         "SOF": "SOF - Woodham Ferrers",
         "WAV": "WAV - Wavertree",
         "WCF": "WCF - on sea",
+        "HYL": "HAL",
+        "COE": "CME",
+        "CPN": "CLN-2",
     },
     "Female1": {
         "GIL": "GIL-2",
@@ -176,6 +179,9 @@ station_map = {
         "LUA": "LUA - London Luton Airport",
         "SOF": "SOF - Woodham Ferrers",
         "WCF": "WCF - on sea",
+        "HYL": "HAL",
+        "COE": "CME",
+        "CPN": "CLN-2",
     },
     "Female2": {
         "CDB": "CDB - Cardiff Bute Road",
@@ -2413,7 +2419,11 @@ def calculate_calling_points(
         # should apply the rest of the logic to it
         if what == JOINING_MAIN_TRAIN:
             found_joining_station = False
-        for location in train_to_check["locations"]:
+        if "locations" in train_to_check:
+            locations = train_to_check["locations"]
+        else:
+            locations = []
+        for location in locations:
             crs, orig_crs = extract_crs(config, location)
 
             check_add_origin(location, crs, what, origins)
