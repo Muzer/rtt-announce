@@ -4332,7 +4332,7 @@ def announce_realtime_departure(
         )
 
 
-    elif service_location == "AT_PLAT":
+    else: # In rare cases serviceLocation can disappear, treat this as AT_PLAT
         logging.info("At platform realtime")
         announce_realtime_departure_generic(
             config,
