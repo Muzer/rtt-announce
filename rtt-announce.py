@@ -4611,7 +4611,7 @@ def main() -> int:
         now = datetime.datetime.now()
         deps_content, arrs_content = fetch_lineups(config, now)
 
-        services = deps_content["services"] + arrs_content["services"]
+        services = arrs_content["services"] + deps_content["services"]
 
         if not announce_services(
             config,
