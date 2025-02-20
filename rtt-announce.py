@@ -3076,7 +3076,8 @@ def get_platform_and_int(service: dict) -> tuple[str, typing.Optional[int]]:
     plat_letter = None
     if platform:
         platform = platform.lower()
-        plat_int = int(''.join(c for c in platform if c.isdigit()))
+        plat_digits = ''.join(c for c in platform if c.isdigit())
+        plat_int = int(plat_digits) if plat_digits else None
         plat_letter = ''.join(c for c in platform if not c.isdigit())
 
     return platform, plat_int, plat_letter
@@ -3099,7 +3100,7 @@ def announce_platform_number(
 
     letter_style = style
 
-    if style == "m" and (
+    if style == "m" and plat_int is not None and (
         str(plat_int) == platform or
         plat_int > 12 or
         config["general"]["voice"] == "Female2"
@@ -3118,6 +3119,8 @@ def announce_platform_number(
                 wavplayer.play_wav(
                     f"platform/{letter_style}/{plat_letter}.wav"
                 )
+    elif plat_int is None:
+        wavplayer.play_wav(f"platform/{style}/{platform}.wav")
     elif plat_int < 21:
         if (
             plat_int <= 12 and
@@ -3279,11 +3282,19 @@ def announce_platform_intro(
         if config["general"]["voice"] == "Female2" and plat_int == 0:
             wavplayer.play_wav("e/platform 0.wav")
             wavplayer.play_wav("m/for the.wav")
-        elif plat_int > 12 or plat_int < 1 or (
-            config["general"]["voice"] == "Female2" and (
-                plat_int > 8 or str(plat_int) != platform
+        elif config["general"]["voice"] == "Female2" and plat_int is None:
+            plat_upper = platform.upper()
+            wavplayer.play_wav(f"e/Platform {plat_upper}.wav")
+            wavplayer.play_wav("m/for the.wav")
+        elif (plat_int is None and (
+            config["general"]["voice"] != "Male1" or platform not in ("a", "b")
+        )) or (
+            plat_int is not None and (plat_int > 12 or plat_int < 1 or (
+                config["general"]["voice"] == "Female2" and (
+                    plat_int > 8 or str(plat_int) != platform
+                )
             )
-        ):
+        )):
             wavplayer.play_wav("s/platform.wav")
             announce_platform_number(config, service, False, wavplayer)
             wavplayer.play_wav("m/for the.wav")
@@ -3405,10 +3416,14 @@ def announce_realtime_arrival_next_train_intro(
             wavplayer
         )
     elif platform:
-        if (
-            plat_int > 12 or
-            plat_int < 1 or
-            str(plat_int) != platform
+        if (plat_int is None and (
+            platform not in ("a", "b") or to_arrive
+        )) or (
+            plat_int is not None and (
+                plat_int > 12 or
+                plat_int < 1 or
+                str(plat_int) != platform
+            )
         ):
             wavplayer.play_wav(f"s/the next train {to_arrive}at platform.wav")
             announce_platform_number(config, service, False, wavplayer)
@@ -3465,10 +3480,12 @@ def announce_realtime_arrival_trust_triggered_intro(
             wavplayer
         )
     elif platform:
-        if (
-            plat_int > 12 or
-            plat_int < 1 or
-            str(plat_int) != platform
+        if (plat_int is None and platform not in ("a", "b")) or (
+            plat_int is not None and (
+                plat_int > 12 or
+                plat_int < 1 or
+                str(plat_int) != platform
+            )
         ):
             wavplayer.play_wav(f"s/the next train at platform.wav")
             announce_platform_number(config, service, False, wavplayer)
@@ -3520,6 +3537,7 @@ def announce_realtime_arrival_now_approaching_intro(
         )
     elif platform:
         if (
+            plat_int is None or
             plat_int > 20 or
             plat_int < 1 or
             str(plat_int) != platform
@@ -3860,11 +3878,18 @@ def announce_realtime_departure_next_train_intro(
         if sub_config["the_next_train_script"]:
             if platform:
                 if (
-                    plat_int > 12 or
-                    plat_int < 1 or
-                    str(plat_int) != platform or (
-                        config["general"]["voice"] == "Female2" and
-                        plat_int > 8
+                    plat_int is None and (
+                        platform not in ("a", "b") or
+                        config["general"]["voice"] == "Female2"
+                    )
+                ) or (
+                    plat_int is not None and (
+                        plat_int > 12 or
+                        plat_int < 1 or
+                        str(plat_int) != platform or (
+                            config["general"]["voice"] == "Female2" and
+                            plat_int > 8
+                        )
                     )
                 ):
                     wavplayer.play_wav("s/the next train at platform.wav")
@@ -3875,6 +3900,12 @@ def announce_realtime_departure_next_train_intro(
                         is_platform_zero(service)
                     ):
                         wavplayer.play_wav("e/platform 0.wav")
+                    elif (
+                        config["general"]["voice"] == "Female2" and
+                        plat_int is None
+                    ):
+                        plat_upper = platform.upper()
+                        wavplayer.play_wav(f"e/Platform {plat_upper}.wav")
                     else:
                         announce_platform_number(
                             config,
@@ -3951,6 +3982,7 @@ def announce_realtime_departure_now_approaching_intro(
         if sub_config["the_train_now_approaching_script"]:
             if platform:
                 if (
+                    plat_int is None or
                     plat_int > 20 or
                     plat_int < 1 or
                     str(plat_int) != platform or (
@@ -3964,6 +3996,13 @@ def announce_realtime_departure_now_approaching_intro(
                     ):
                         wavplayer.play_wav("s/the train now approaching.wav")
                         wavplayer.play_wav("e/platform 0.wav")
+                    elif (
+                        config["general"]["voice"] == "Female2" and
+                        plat_int is None
+                    ):
+                        plat_upper = platform.upper()
+                        wavplayer.play_wav("s/the train now approaching.wav")
+                        wavplayer.play_wav(f"e/Platform {plat_upper}.wav")
                     else:
                         wavplayer.play_wav(
                             "s/the train now approaching platform.wav"
