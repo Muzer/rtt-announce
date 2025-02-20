@@ -2089,7 +2089,7 @@ def should_announce_realtime_trust_triggered_repeat(
             ) and
             not realtime_dep_actual
         ) and
-        (uid, run_date) not in service_last_announcement and
+        (uid, run_date) in service_last_announcement and
         (realtime_arr_actual or plat_actual) ==
         (
             service_last_announcement[(uid, run_date)][
