@@ -1765,6 +1765,8 @@ def assoc_service_has_location(
 # there should be strictly zero or one per train per loop. This is with the
 # exception of TRUST-triggered which are impossible to distinguish without
 # looking back at service_last_announcement, and so get their own function.
+# Also repeated now_standing announcements get their own script but again can't
+# be easily distinguished so also get their own function.
 def should_announce_realtime(
     config: dict,
     service: dict,
@@ -1790,10 +1792,6 @@ def should_announce_realtime(
     booked_hour, booked_minute = get_booked_hour_minute(service, now)
 
     now_to_booked = time_diff(booked_hour, booked_minute, now)
-    if (uid, run_date) in service_last_announcement:
-        old_now_to_booked = service_last_announcement[(uid, run_date)][
-            "now_to_booked"
-        ]
 
     return (
         (
@@ -1879,25 +1877,71 @@ def should_announce_realtime(
             (uid, run_date) not in service_last_announcement or
             service_location != service_last_announcement[
                 (uid, run_date)
-            ]["service_location"] or
+            ]["service_location"]
+        ) and
+        (
+            display_as != "ORIGIN" or
+            "associations" not in service["locationDetail"] or
+            "divide" not in [
+                assoc["type"] for
+                assoc in service["locationDetail"]["associations"]
+            ] or
+            not assoc_service_has_location(service, services)
+        )
+    )
+
+
+def should_announce_realtime_repeat(
+    config: dict,
+    service: dict,
+    service_last_announcement: dict,
+    now: datetime.datetime,
+    services: list[dict]
+) -> bool:
+    uid = service["serviceUid"]
+    run_date = service["runDate"]
+    service_location = service["locationDetail"].get("serviceLocation")
+    display_as = service["locationDetail"]["displayAs"]
+    platform = service["locationDetail"].get("platform")
+
+    booked_hour, booked_minute = get_booked_hour_minute(service, now)
+
+    now_to_booked = time_diff(booked_hour, booked_minute, now)
+    if (uid, run_date) in service_last_announcement:
+        old_now_to_booked = service_last_announcement[(uid, run_date)][
+            "now_to_booked"
+        ]
+
+    return (
+        (
+            is_departing(service) and
+            config["announcements_enabled"]["departures_now_standing"] and
+            service_location == "AT_PLAT" and
+            now_to_booked <=
+            config["departures_now_standing"]["minutes_before"] and
             (
-                is_departing(service) and
-                config["announcements_enabled"]["departures_now_standing"] and
-                service_location == "AT_PLAT" and
-                (
-                    config["departures_now_standing"]["timed_announcements"] or
-                    not config["departures_now_standing"][
-                        "always_announce_before"
-                    ] # if this is switched off, it won't have been announced
-                      # first time. If another type of announcement caused this
-                      # to be written to service_last_announcement it would
-                      # then otherwise never be announced.
-                ) and
-                now_to_booked <=
-                config["departures_now_standing"]["minutes_before"] and
-                old_now_to_booked >
-                config["departures_now_standing"]["minutes_before"]
+                platform or
+                config["departures_now_standing"]["no_platform"]
             )
+        ) and
+        # Some sanity to stop this returning true when we should also be doing
+        # a realtime
+        (uid, run_date) in service_last_announcement and
+        service_location == service_last_announcement[(uid, run_date)][
+            "service_location"
+        ] and
+        (
+            (
+                config["departures_now_standing"]["timed_announcements"] or
+                not config["departures_now_standing"][
+                    "always_announce_before"
+                ] # if this is switched off, it won't have been announced
+                  # first time. If another type of announcement caused this
+                  # to be written to service_last_announcement it would
+                  # then otherwise never be announced.
+            ) and
+            old_now_to_booked >
+            config["departures_now_standing"]["minutes_before"]
         ) and
         (
             display_as != "ORIGIN" or
@@ -1936,10 +1980,6 @@ def should_announce_realtime_trust_triggered(
     booked_hour, booked_minute = get_booked_hour_minute(service, now)
 
     now_to_booked = time_diff(booked_hour, booked_minute, now)
-    if (uid, run_date) in service_last_announcement:
-        old_now_to_booked = service_last_announcement[(uid, run_date)][
-            "now_to_booked"
-        ]
 
     return (
         not service_location and
@@ -1989,28 +2029,88 @@ def should_announce_realtime_trust_triggered(
                     ] or
                     config["announcements_enabled"]["arrivals_trust_triggered"]
                 )
-            ) or
-            (
-                is_departing(service) and
-                config["announcements_enabled"][
-                    "departures_trust_triggered"
-                ] and
-                (
-                    config["departures_trust_triggered"][
-                        "timed_announcements"
-                    ] or
-                    not config["departures_trust_triggered"][
-                        "always_announce_before"
-                    ] # if this is switched off, it won't have been announced
-                      # first time. If another type of announcement caused this
-                      # to be written to service_last_announcement it would
-                      # then otherwise never be announced.
-                ) and
-                now_to_booked <=
-                config["departures_trust_triggered"]["minutes_before"] and
-                old_now_to_booked >
-                config["departures_trust_triggered"]["minutes_before"]
             )
+        ) and
+        (
+            display_as != "ORIGIN" or
+            "associations" not in service["locationDetail"] or
+            "divide" not in [
+                assoc["type"] for
+                assoc in service["locationDetail"]["associations"]
+            ] or
+            not assoc_service_has_location(service, services)
+        )
+    )
+
+
+def should_announce_realtime_trust_triggered_repeat(
+    config: dict,
+    service: dict,
+    service_last_announcement: dict,
+    now: datetime.datetime,
+    services: list[dict]
+) -> bool:
+    uid = service["serviceUid"]
+    run_date = service["runDate"]
+    service_location = service["locationDetail"].get("serviceLocation")
+    display_as = service["locationDetail"]["displayAs"]
+    platform = service["locationDetail"].get("platform")
+    realtime_arr_actual = (
+        service["locationDetail"].get("realtimeArrivalActual")
+    )
+    plat_actual = service["locationDetail"].get("platformConfirmed")
+    realtime_dep_actual = (
+        service["locationDetail"].get("realtimeDepartureActual")
+    )
+    if service["locationDetail"].get("realtimeDepartureNoReport"):
+        realtime_dep_actual = True
+
+    booked_hour, booked_minute = get_booked_hour_minute(service, now)
+
+    now_to_booked = time_diff(booked_hour, booked_minute, now)
+    if (uid, run_date) in service_last_announcement:
+        old_now_to_booked = service_last_announcement[(uid, run_date)][
+            "now_to_booked"
+        ]
+
+    return (
+        not service_location and
+        (
+            is_departing(service) and
+            config["announcements_enabled"][
+                "departures_trust_triggered"
+            ] and
+            (realtime_arr_actual or plat_actual) and
+            now_to_booked <=
+            config["departures_trust_triggered"]["minutes_before"] and
+            (
+                platform or
+                config["departures_trust_triggered"]["no_platform"]
+            ) and
+            not realtime_dep_actual
+        ) and
+        (uid, run_date) not in service_last_announcement and
+        (realtime_arr_actual or plat_actual) ==
+        (
+            service_last_announcement[(uid, run_date)][
+                "realtime_arr_actual"
+            ] or
+            service_last_announcement[(uid, run_date)]["plat_actual"]
+        ) and
+        (
+            (
+                config["departures_trust_triggered"][
+                    "timed_announcements"
+                ] or
+                not config["departures_trust_triggered"][
+                    "always_announce_before"
+                ] # if this is switched off, it won't have been announced
+                  # first time. If another type of announcement caused this
+                  # to be written to service_last_announcement it would
+                  # then otherwise never be announced.
+            ) and
+            old_now_to_booked >
+            config["departures_trust_triggered"]["minutes_before"]
         ) and
         (
             display_as != "ORIGIN" or
@@ -4087,6 +4187,7 @@ def announce_realtime_departure_generic(
     cancellation: dict,
     intro_function: typing.Callable,
     now: datetime.datetime,
+    repeat: bool,
     wavplayer: WavPlayer
 ) -> None:
 
@@ -4098,7 +4199,7 @@ def announce_realtime_departure_generic(
         service,
         destinations,
         division,
-        True,
+        not repeat,
         now,
         wavplayer
     )
@@ -4152,6 +4253,7 @@ def announce_realtime_departure(
     division: dict,
     cancellation: dict,
     now: datetime.datetime,
+    repeat: bool,
     wavplayer: WavPlayer
 ) -> None:
     service_location = service["locationDetail"].get("serviceLocation")
@@ -4169,6 +4271,7 @@ def announce_realtime_departure(
             cancellation,
             announce_realtime_departure_next_train_intro,
             now,
+            repeat,
             wavplayer
         )
 
@@ -4185,6 +4288,7 @@ def announce_realtime_departure(
             cancellation,
             announce_realtime_departure_now_approaching_intro,
             now,
+            repeat,
             wavplayer
         )
 
@@ -4202,6 +4306,7 @@ def announce_realtime_departure(
             cancellation,
             announce_realtime_departure_now_standing_intro,
             now,
+            repeat,
             wavplayer
         )
 
@@ -4218,6 +4323,7 @@ def announce_realtime_departure_trust_triggered(
     division: dict,
     cancellation: dict,
     now: datetime.datetime,
+    repeat: bool,
     wavplayer: WavPlayer
 ) -> None:
     logging.info("TRUST triggered")
@@ -4232,6 +4338,7 @@ def announce_realtime_departure_trust_triggered(
         cancellation,
         announce_realtime_departure_trust_triggered_intro,
         now,
+        repeat,
         wavplayer
     )
 
@@ -4248,6 +4355,7 @@ def announce_realtime(
     division: dict,
     cancellation: dict,
     now: datetime.datetime,
+    repeat: bool,
     wavplayer: WavPlayer
 ) -> None:
     display_as = service["locationDetail"]["displayAs"]
@@ -4267,6 +4375,7 @@ def announce_realtime(
             division,
             cancellation,
             now,
+            repeat,
             wavplayer
         )
 
@@ -4280,6 +4389,7 @@ def announce_realtime_trust_triggered(
     division: dict,
     cancellation: dict,
     now: datetime.datetime,
+    repeat: bool,
     wavplayer: WavPlayer
 ) -> None:
     display_as = service["locationDetail"]["displayAs"]
@@ -4305,6 +4415,7 @@ def announce_realtime_trust_triggered(
             division,
             cancellation,
             now,
+            repeat,
             wavplayer
         )
 
@@ -4449,8 +4560,26 @@ def announce_services(
             services
         )
 
+        should_do_realtime_repeat = should_announce_realtime_repeat(
+            config,
+            service,
+            service_last_announcement,
+            now,
+            services
+        )
+
         should_do_realtime_trust_triggered = (
             should_announce_realtime_trust_triggered(
+                config,
+                service,
+                service_last_announcement,
+                now,
+                services
+            )
+        )
+
+        should_do_realtime_trust_triggered_repeat = (
+            should_announce_realtime_trust_triggered_repeat(
                 config,
                 service,
                 service_last_announcement,
@@ -4470,7 +4599,9 @@ def announce_services(
             should_do_departure_delay or
             should_do_arrival_delay or
             should_do_realtime or
+            should_do_realtime_repeat or
             should_do_realtime_trust_triggered or
+            should_do_realtime_trust_triggered_repeat or
             should_do_departure_bus or
             should_do_departure_platform_alteration or
             should_do_arrival_platform_alteration or
@@ -4566,6 +4697,20 @@ def announce_services(
                 division,
                 cancellation,
                 now,
+                False,
+                wavplayer
+            )
+        elif should_do_realtime_repeat:
+            announce_realtime(
+                config,
+                service,
+                all_calling_points,
+                origins,
+                destinations,
+                division,
+                cancellation,
+                now,
+                True,
                 wavplayer
             )
         elif should_do_realtime_trust_triggered:
@@ -4578,6 +4723,20 @@ def announce_services(
                 division,
                 cancellation,
                 now,
+                False,
+                wavplayer
+            )
+        elif should_do_realtime_trust_triggered_repeat:
+            announce_realtime_trust_triggered(
+                config,
+                service,
+                all_calling_points,
+                origins,
+                destinations,
+                division,
+                cancellation,
+                now,
+                True,
                 wavplayer
             )
 
