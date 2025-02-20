@@ -48,7 +48,8 @@ play_if_destination_unavailable = false
 # repeated calling points where calling points are missing.
 repeat_missing_announcement = true
 
-# Print the relevant data from the RTT API when considering it.
+# Print the relevant data from the RTT API when considering it. (It will always
+# be logged)
 debug = false
 
 # Delay in seconds between polling the API if no announcements were made in a

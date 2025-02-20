@@ -3,6 +3,7 @@
 import collections
 import datetime
 import json
+import logging
 import os
 import pprint
 import pyaudio
@@ -13,6 +14,8 @@ import time
 import tomllib
 import traceback
 import typing
+
+logger = logging.getLogger(__name__)
 
 toc_map = {
     "Male1": {
@@ -1108,28 +1111,26 @@ class WavPlayer:
             self.config["general"]["voice"]
         )
         try:
-            print(os.path.join(path, file))
+            logging.info(os.path.join(path, file))
             data, rate = soundfile.read(os.path.join(path, file))
             data2 = bytearray()
             for i, x in enumerate(data):
                 try:
                     data2.append(int((x + 1.0) * 128))
                 except:
-                    traceback.print_exc()
-                    print(x)
+                    logging.info(x, exc_info=1)
 
             self.stream.write(bytes(data2))
 
             self.last_played = file
         except:
-            traceback.print_exc()
-            print("Missing file")
+            logging.info("Missing file", exc_info=1)
             if (
                 self.last_played and
                 play_last and
                 self.config["general"]["repeat_missing_announcement"]
             ):
-                print("Playing last file")
+                logging.info("Playing last file")
                 self.play_wav(self.last_played, False)
 
 
@@ -2166,7 +2167,7 @@ def handle_divisions(
     ):
         for assoc in location["associations"]:
             if assoc["type"] == "divide":
-                print("Divides")
+                logging.info("Divides")
 
                 uid = assoc["associatedUid"]
 
@@ -2180,9 +2181,8 @@ def handle_divisions(
                     assoc["associatedRunDate"]
                 )
 
-                if config["general"]["debug"]:
-                    pp = pprint.PrettyPrinter(indent=4)
-                    pp.pprint(dividing_train_content)
+                pp = pprint.PrettyPrinter(indent=4)
+                logging.debug(pp.pformat(dividing_train_content))
 
                 # Possible with some divide-to-ECS
                 if "locations" not in dividing_train_content:
@@ -2193,7 +2193,7 @@ def handle_divisions(
                     dividing_train_content["locations"][0]["displayAs"] ==
                     "CANCELLED_CALL"
                 ):
-                    print("Doesn't divide, is actually cancelled")
+                    logging.info("Doesn't divide, is actually cancelled")
                     trains_to_check.append((
                         dividing_train_content,
                         all_calling_points["cancelled"],
@@ -2267,7 +2267,7 @@ def handle_pre_attachments(
     if "associations" in location:
         for assoc in location["associations"]:
             if assoc["type"] == "join":
-                print("Joins")
+                logging.info("Joins")
                 uid = assoc["associatedUid"]
 
                 if uid in uids_seen:
@@ -2281,9 +2281,8 @@ def handle_pre_attachments(
                     assoc["associatedRunDate"]
                 )
 
-                if config["general"]["debug"]:
-                    pp = pprint.PrettyPrinter(indent=4)
-                    pp.pprint(joining_train_content)
+                pp = pprint.PrettyPrinter(indent=4)
+                logging.debug(pp.pformat(joining_train_content))
 
                 trains_to_check.append((
                     joining_train_content,
@@ -2313,7 +2312,7 @@ def handle_main_train_attachments(
     if "associations" in location:
         for assoc in location["associations"]:
             if assoc["type"] == "join":
-                print("Joins")
+                logging.info("Joins")
                 uid = assoc["associatedUid"]
 
                 if uid in uids_seen:
@@ -2327,9 +2326,8 @@ def handle_main_train_attachments(
                     assoc["associatedRunDate"]
                 )
 
-                if config["general"]["debug"]:
-                    pp = pprint.PrettyPrinter(indent=4)
-                    pp.pprint(joining_train_content)
+                pp = pprint.PrettyPrinter(indent=4)
+                logging.debug(pp.pformat(joining_train_content))
 
                 # Possible with some divide-to-ECS
                 if "locations" not in joining_train_content:
@@ -2568,7 +2566,7 @@ def destinations_valid(config: dict, destinations: list[str]) -> bool:
             config["general"]["voice"],
             f"station/e/{destination}.wav"
         )):
-            print("Invalid destination, aborting")
+            logging.info("Invalid destination, aborting")
             return False
     return True
 
@@ -2610,7 +2608,7 @@ def announce_cancellation(
     service: dict,
     wavplayer: WavPlayer
 ) -> None:
-    print("Cancel")
+    logging.info("Cancel")
     dep_hour, dep_min = calculate_announcement_dep_time(service)
     cancel_reason = service["locationDetail"].get("cancelReasonCode")
     # TODO support portion working here?
@@ -2756,7 +2754,7 @@ def announce_departure_delay(
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
-    print("Departure delay")
+    logging.info("Departure delay")
     booked_hour, booked_minute = get_booked_hour_minute(service, now)
     realtime_hour, realtime_minute = get_realtime_hour_minute(service, now)
 
@@ -2833,7 +2831,7 @@ def announce_arrival_delay(
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
-    print("Arrival delay")
+    logging.info("Arrival delay")
     booked_hour, booked_minute = get_booked_hour_minute(service, now)
     realtime_hour, realtime_minute = get_realtime_hour_minute(service, now)
 
@@ -2914,7 +2912,7 @@ def announce_departure_bus(
     calling_points: list,
     wavplayer: WavPlayer
 ) -> None:
-    print("Bus")
+    logging.info("Bus")
     repeat_number = 1
     if config["departures_bus"]["repeat"]:
         repeat_number = 2
@@ -3214,7 +3212,7 @@ def announce_departure_platform_alteration(
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
-    print("Platform alteration")
+    logging.info("Platform alteration")
 
     play_chime(config, config["departures_platform_alteration"], wavplayer)
 
@@ -3253,7 +3251,7 @@ def announce_arrival_platform_alteration(
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
-    print("Platform alteration")
+    logging.info("Platform alteration")
 
     play_chime(config, config["arrivals_platform_alteration"], wavplayer)
 
@@ -3289,7 +3287,7 @@ def announce_realtime_arrival_next_train_intro(
         "to arrive " if config["arrivals_next_train"]["to_arrive"] else ""
     )
 
-    print("Approaching station realtime")
+    logging.info("Approaching station realtime")
 
     play_chime(config, config["arrivals_next_train"], wavplayer)
 
@@ -3349,7 +3347,7 @@ def announce_realtime_arrival_trust_triggered_intro(
     platform, plat_int, plat_letter = get_platform_and_int(service)
     platform_alteration = service["locationDetail"].get("platformChanged")
 
-    print("TRUST triggered")
+    logging.info("TRUST triggered")
 
     play_chime(config, config["arrivals_trust_triggered"], wavplayer)
 
@@ -3403,7 +3401,7 @@ def announce_realtime_arrival_now_approaching_intro(
     platform, plat_int, plat_letter = get_platform_and_int(service)
     platform_alteration = service["locationDetail"].get("platformChanged")
 
-    print("Approaching platform realtime")
+    logging.info("Approaching platform realtime")
 
     play_chime(config, config["arrivals_now_approaching"], wavplayer)
 
@@ -3482,7 +3480,7 @@ def announce_realtime_arrival_now_standing_intro(
     platform, plat_int, plat_letter = get_platform_and_int(service)
     platform_alteration = service["locationDetail"].get("platformChanged")
 
-    print("At platform realtime")
+    logging.info("At platform realtime")
 
     play_chime(config, config["arrivals_now_standing"], wavplayer)
 
@@ -3534,7 +3532,7 @@ def announce_realtime_arrival(
 ) -> None:
     service_location = service["locationDetail"].get("serviceLocation")
 
-    print("Doing arrivals")
+    logging.info("Doing arrivals")
     if service_location == "APPR_STAT":
         announce_realtime_arrival_next_train_intro(
             config,
@@ -4159,7 +4157,7 @@ def announce_realtime_departure(
     service_location = service["locationDetail"].get("serviceLocation")
 
     if service_location == "APPR_STAT":
-        print("Approaching station realtime")
+        logging.info("Approaching station realtime")
         announce_realtime_departure_generic(
             config,
             config["departures_next_train"],
@@ -4175,7 +4173,7 @@ def announce_realtime_departure(
         )
 
     elif service_location == "APPR_PLAT":
-        print("Approaching platform realtime")
+        logging.info("Approaching platform realtime")
         announce_realtime_departure_generic(
             config,
             config["departures_now_approaching"],
@@ -4192,7 +4190,7 @@ def announce_realtime_departure(
 
 
     elif service_location == "AT_PLAT":
-        print("At platform realtime")
+        logging.info("At platform realtime")
         announce_realtime_departure_generic(
             config,
             config["departures_now_standing"],
@@ -4222,7 +4220,7 @@ def announce_realtime_departure_trust_triggered(
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
-    print("TRUST triggered")
+    logging.info("TRUST triggered")
     announce_realtime_departure_generic(
         config,
         config["departures_trust_triggered"],
@@ -4374,7 +4372,7 @@ def announce_safety(
                 continue
 
         announced = True
-        print(f"Announcing {safety_type}")
+        logging.info(f"Announcing {safety_type}")
         play_chime(config, config["safety"], wavplayer)
         announce_function(config, wavplayer)
         time.sleep(config["general"]["announcement_delay"])
@@ -4400,8 +4398,7 @@ def announce_services(
 
     announced = False
     for service in services:
-        if config["general"]["debug"]:
-            pp.pprint(service)
+        logging.debug(pp.pformat(service))
 
         should_do_departure_delay = should_announce_departure_delay(
             config,
@@ -4481,7 +4478,7 @@ def announce_services(
         ):
             continue
 
-        print("Should do announcement")
+        logging.info("Should do announcement")
 
         # At this point, only silly admin issues can stop us, so act as if we
         # have made an announcement and update the map
@@ -4493,8 +4490,7 @@ def announce_services(
 
         train_content = fetch_train_content(config, service)
 
-        if config["general"]["debug"]:
-            pp.pprint(train_content)
+        logging.debug(pp.pformat(train_content))
 
         all_calling_points, origins, destinations, division, cancellation = (
             calculate_calling_points(config, service, train_content)
@@ -4598,7 +4594,13 @@ def announce_services(
 
 
 def main() -> int:
+    logging.basicConfig(filename="rtt-announce.log", level=logging.DEBUG)
     config = load_config("rtt-announce.toml")
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(
+        logging.DEBUG if config["general"]["debug"] else logging.INFO
+    )
+    logging.getLogger().addHandler(handler)
 
     service_last_announcement = {}
     safety_last_announcement = {}
