@@ -1196,10 +1196,10 @@ def fetch_lineups(config: dict, now: datetime.datetime) -> tuple[dict]:
         f"https://{user}:{password}@api.rtt.io/api/v1/json/search/{station}" +
         f"/{strftime}"
     )
-    deps_content = fetch_lineup(deps_url)
-
     arrs_url = deps_url + "/arrivals"
+
     arrs_content = fetch_lineup(arrs_url)
+    deps_content = fetch_lineup(deps_url)
 
     return (deps_content, arrs_content)
 
