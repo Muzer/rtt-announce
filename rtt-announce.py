@@ -3130,6 +3130,7 @@ def announce_platform_number(
     elif plat_int < 21:
         if (
             plat_int <= 12 and
+            plat_letter in ("a", "b", "c", "d") and
             config["general"]["voice"] != "Female2"
         ) or str(plat_int) == platform:
             wavplayer.play_wav(f"platform/{style}/{platform}.wav")
