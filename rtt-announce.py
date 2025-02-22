@@ -148,19 +148,23 @@ toc_map = {
 
 station_map = {
     "Male1": {
-        "CDN": "CDN - Smitham",
+        #"CDN": "CDN - Smitham", # Now have bodged one
         "SDC": "SDC - Shoreditch",
-        "BIT": "BIT - Bicester Town",
+        #"BIT": "BIT - Bicester Town", # Now have bodged one
         "BUI": "BUI - Strathclyde",
         "CLT": "CLT - Clacton",
-        "DFE": "DFE - Dunfermline",
+        #"DFE": "DFE - Dunfermline", # Now have bodged one
         "GSC": "GSC - Lambhill",
         #"HXX": "HXX - Heathrow Airport", # Now have specific one for T2,3
         "LUA": "LUA - London Luton Airport",
+        "NFA": "NFA - Fambridge",
         "SOF": "SOF - Woodham Ferrers",
         "WAV": "WAV - Wavertree",
         "WCF": "WCF - on sea",
         "COE": "CME",
+        "CON": "CON-2",
+        "DLR": "DLR-2",
+        "DMG": "DMG - Dinas",
     },
     "Female1": {
         "CDN": "CDN - Smitham",
@@ -171,9 +175,11 @@ station_map = {
         "GSC": "GSC - Lambhill",
         "HXX": "HXX - Heathrow Airport",
         "LUA": "LUA - London Luton Airport",
+        "NFA": "NFA - Fambridge",
         "SOF": "SOF - Woodham Ferrers",
         "WCF": "WCF - on sea",
         "COE": "CME",
+        "DMG": "DMG - Dinas",
     },
     "Female2": {
         "CDB": "CDB - Cardiff Bute Road",
