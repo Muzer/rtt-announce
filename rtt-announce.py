@@ -3122,11 +3122,19 @@ def announce_platform_number(
                 style = "m"
             wavplayer.play_wav(f"{style}/0.wav")
             if str(plat_int) != platform:
-                wavplayer.play_wav(
-                    f"platform/{letter_style}/{plat_letter}.wav"
-                )
+                if plat_letter in ("a", "b", "c", "d"):
+                    wavplayer.play_wav(
+                        f"platform/{letter_style}/{plat_letter}.wav"
+                    )
+                else:
+                    wavplayer.play_wav(
+                        f"{letter_style}/{plat_letter}.wav"
+                    )
     elif plat_int is None:
-        wavplayer.play_wav(f"platform/{style}/{platform}.wav")
+        if plat_letter in ("a", "b", "c", "d"):
+            wavplayer.play_wav(f"platform/{style}/{platform}.wav")
+        else:
+            wavplayer.play_wav(f"{letter_style}/{platform}.wav")
     elif plat_int < 21:
         if (
             plat_int <= 12 and
@@ -3137,18 +3145,28 @@ def announce_platform_number(
         else:
             wavplayer.play_wav(f"platform/{style}/{plat_int}.wav")
             if config["general"]["voice"] != "Female2":
-                wavplayer.play_wav(
-                    f"platform/{letter_style}/{plat_letter}.wav"
-                )
+                if plat_letter in ("a", "b", "c", "d"):
+                    wavplayer.play_wav(
+                        f"platform/{letter_style}/{plat_letter}.wav"
+                    )
+                else:
+                    wavplayer.play_wav(
+                        f"{letter_style}/{plat_letter}.wav"
+                    )
     else:
         if str(plat_int) == platform:
             wavplayer.play_wav(f"mins/{style}/{platform}.wav")
         else:
             wavplayer.play_wav(f"mins/{style}/{platform}.wav")
             if config["general"]["voice"] != "Female2":
-                wavplayer.play_wav(
-                    f"platform/{letter_style}/{plat_letter}.wav"
-                )
+                if plat_letter in ("a", "b", "c", "d"):
+                    wavplayer.play_wav(
+                        f"platform/{letter_style}/{plat_letter}.wav"
+                    )
+                else:
+                    wavplayer.play_wav(
+                        f"{letter_style}/{plat_letter}.wav"
+                    )
 
 
 def announce_time_and_toc(
