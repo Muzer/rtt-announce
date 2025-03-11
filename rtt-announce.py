@@ -4021,7 +4021,8 @@ def announce_realtime_set_down_only_next_train_intro(
     )
     passengers = (
         "passengers " if
-        config["set_down_only_next_train"]["passengers"] else
+        config["set_down_only_next_train"]["passengers"] or
+        config["general"]["voice"] == "Female1" else
         ""
     )
 
@@ -4156,7 +4157,8 @@ def announce_realtime_set_down_only_trust_triggered_intro(
 
     passengers = (
         "passengers " if
-        config["set_down_only_next_train"]["passengers"] else
+        config["set_down_only_next_train"]["passengers"] or
+        config["general"]["voice"] == "Female1" else
         ""
     )
 
@@ -4277,7 +4279,8 @@ def announce_realtime_set_down_only_now_approaching_intro(
 
     passengers = (
         "passengers " if
-        config["set_down_only_next_train"]["passengers"] else
+        config["set_down_only_next_train"]["passengers"] or
+        config["general"]["voice"] == "Female1" else
         ""
     )
 
@@ -4423,7 +4426,8 @@ def announce_realtime_set_down_only_now_standing_intro(
 
     passengers = (
         "passengers " if
-        config["set_down_only_next_train"]["passengers"] else
+        config["set_down_only_next_train"]["passengers"] or
+        config["general"]["voice"] == "Female1" else
         ""
     )
 
@@ -4586,7 +4590,12 @@ def announce_realtime_set_down_only(
         )
         sub_config = config["set_down_only_now_standing"]
 
-    passengers = "passengers " if sub_config["passengers"] else ""
+    passengers = (
+        "passengers " if
+        sub_config["passengers"] or
+        config["general"]["voice"] == "Female1" else
+        ""
+    )
 
     if sub_config["repeat_sets_down"]:
         time.sleep(0.7)
@@ -4650,7 +4659,12 @@ def announce_realtime_set_down_only_trust_triggered(
     )
     sub_config = config["set_down_only_trust_triggered"]
 
-    passengers = "passengers " if sub_config["passengers"] else ""
+    passengers = (
+        "passengers " if
+        sub_config["passengers"] or
+        config["general"]["voice"] == "Female1" else
+        ""
+    )
 
     if sub_config["repeat_sets_down"]:
         time.sleep(0.7)
