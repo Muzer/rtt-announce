@@ -1582,12 +1582,13 @@ def should_announce_departure_platform_alteration(
     service_last_announcement: dict,
     now: datetime.datetime,
     services: list[dict]
-) -> bool:
+) -> tuple[bool, bool]:
     uid = service["serviceUid"]
     run_date = service["runDate"]
     display_as = service["locationDetail"]["displayAs"]
     platform_alteration = service["locationDetail"].get("platformChanged")
     service_location = service["locationDetail"].get("serviceLocation")
+    platform = service["locationDetail"].get("platform")
 
     realtime_dep_actual = (
         service["locationDetail"].get("realtimeDepartureActual")
@@ -1599,18 +1600,37 @@ def should_announce_departure_platform_alteration(
     if service["locationDetail"].get("realtimeDepartureNoReport"):
         realtime_dep_actual = True
 
-    return (
+    is_alteration = (
         # We do want is_departing here, as a platform alteration on the joining
         # portion will usually indicate one for the whole train.
         is_departing(service) and
-        platform_alteration and
         (
-            (uid, run_date) not in service_last_announcement or
-            not service_last_announcement[
-                (uid, run_date)
-            ]["platform_alteration"]
+            (
+                platform_alteration and
+                (uid, run_date) not in service_last_announcement
+            ) or
+            (
+                platform_alteration and
+                not service_last_announcement[
+                    (uid, run_date)
+                ]["platform_alteration"]
+            ) or
+            (
+                (uid, run_date) in service_last_announcement and
+                service_last_announcement[
+                    (uid, run_date)
+                ]["platform_alteration"] and
+                platform != service_last_announcement[
+                    (uid, run_date)
+                ]["platform"]
+            )
         ) and
-        not realtime_dep_actual and
+        not realtime_dep_actual
+    )
+
+    return (
+        is_alteration,
+        is_alteration and
         # if realtime announcements are enabled with platform alterations and
         # we are about to make one of those, suppress the platform alteration
         # as it will just duplicate information. TODO maybe revise this once
@@ -1680,12 +1700,13 @@ def should_announce_arrival_platform_alteration(
     service_last_announcement: dict,
     now: datetime.datetime,
     services: list[dict]
-) -> bool:
+) -> tuple[bool, bool]:
     uid = service["serviceUid"]
     run_date = service["runDate"]
     display_as = service["locationDetail"]["displayAs"]
     platform_alteration = service["locationDetail"].get("platformChanged")
     service_location = service["locationDetail"].get("serviceLocation")
+    platform = service["locationDetail"].get("platform")
 
     realtime_arr_actual = (
         service["locationDetail"].get("realtimeArrivalActual")
@@ -1693,16 +1714,39 @@ def should_announce_arrival_platform_alteration(
     if service["locationDetail"].get("realtimeArrivalNoReport"):
         realtime_arr_actual = True
 
-    return (
-        is_arriving(service) and
-        platform_alteration and
-        (
-            (uid, run_date) not in service_last_announcement or
+    is_alteration = (
+        is_arriving(service) and (
+            (
+                platform_alteration and
+                (uid, run_date) not in service_last_announcement
+            ) or
+            (
+                platform_alteration and
+                not service_last_announcement[
+                    (uid, run_date)
+                ]["platform_alteration"]
+            ) or
+            (
+                (uid, run_date) in service_last_announcement and
+                service_last_announcement[
+                    (uid, run_date)
+                ]["platform_alteration"] and
+                platform != service_last_announcement[
+                    (uid, run_date)
+                ]["platform"]
+            )
+        ) and
+        (not realtime_arr_actual or service_location or (
+            (uid, run_date) in service_last_announcement and
             not service_last_announcement[
                 (uid, run_date)
-            ]["platform_alteration"]
-        ) and
-        (not realtime_arr_actual or service_location) and
+            ]["realtime_arr_actual"]
+        ))
+    )
+
+    return (
+        is_alteration,
+        is_alteration and
         # if realtime announcements are enabled with platform alterations and
         # we are about to make one of those, suppress the platform alteration
         # as it will just duplicate information. TODO maybe revise this once
@@ -2175,6 +2219,7 @@ def update_service_last_announcement(
         service["locationDetail"].get("realtimeArrivalActual")
     )
     plat_actual = service["locationDetail"].get("platformConfirmed")
+    platform = service["locationDetail"].get("platform")
 
     booked_hour, booked_minute = get_booked_hour_minute(service, now)
     realtime_hour, realtime_minute = get_realtime_hour_minute(service, now)
@@ -2196,6 +2241,7 @@ def update_service_last_announcement(
         "is_cancel": display_as in ("TERMINATES", "CANCELLED_CALL"),
         "realtime_arr_actual": realtime_arr_actual,
         "plat_actual": plat_actual,
+        "platform": platform,
     }
 
 
@@ -3413,11 +3459,11 @@ def announce_realtime_arrival_next_train_intro(
     config: dict,
     service: dict,
     origins: list[str],
+    platform_alteration: bool,
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
     platform, plat_int, plat_letter = get_platform_and_int(service)
-    platform_alteration = service["locationDetail"].get("platformChanged")
 
     to_arrive = (
         "to arrive " if config["arrivals_next_train"]["to_arrive"] else ""
@@ -3481,11 +3527,11 @@ def announce_realtime_arrival_trust_triggered_intro(
     config: dict,
     service: dict,
     origins: list[str],
+    platform_alteration: bool,
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
     platform, plat_int, plat_letter = get_platform_and_int(service)
-    platform_alteration = service["locationDetail"].get("platformChanged")
 
     logging.info("TRUST triggered")
 
@@ -3537,11 +3583,11 @@ def announce_realtime_arrival_now_approaching_intro(
     config: dict,
     service: dict,
     origins: list[str],
+    platform_alteration: bool,
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
     platform, plat_int, plat_letter = get_platform_and_int(service)
-    platform_alteration = service["locationDetail"].get("platformChanged")
 
     logging.info("Approaching platform realtime")
 
@@ -3617,11 +3663,11 @@ def announce_realtime_arrival_now_standing_intro(
     config: dict,
     service: dict,
     origins: list[str],
+    platform_alteration: bool,
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
     platform, plat_int, plat_letter = get_platform_and_int(service)
-    platform_alteration = service["locationDetail"].get("platformChanged")
 
     logging.info("At platform realtime")
 
@@ -3670,6 +3716,7 @@ def announce_realtime_arrival(
     config: dict,
     service: dict,
     origins: list[str],
+    platform_alteration: bool,
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
@@ -3681,6 +3728,7 @@ def announce_realtime_arrival(
             config,
             service,
             origins,
+            platform_alteration,
             now,
             wavplayer
         )
@@ -3691,6 +3739,7 @@ def announce_realtime_arrival(
             config,
             service,
             origins,
+            platform_alteration,
             now,
             wavplayer
         )
@@ -3701,6 +3750,7 @@ def announce_realtime_arrival(
             config,
             service,
             origins,
+            platform_alteration,
             now,
             wavplayer
         )
@@ -3722,6 +3772,7 @@ def announce_realtime_arrival_trust_triggered(
     config: dict,
     service: dict,
     origins: list[str],
+    platform_alteration: bool,
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
@@ -3729,6 +3780,7 @@ def announce_realtime_arrival_trust_triggered(
         config,
         service,
         origins,
+        platform_alteration,
         now,
         wavplayer
     )
@@ -3879,10 +3931,10 @@ def announce_realtime_departure_next_train_intro(
     destinations: list[str],
     division: dict,
     announce_attention: bool,
+    platform_alteration: bool,
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
-    platform_alteration = service["locationDetail"].get("platformChanged")
     platform, plat_int, plat_letter = get_platform_and_int(service)
 
     if (
@@ -3983,10 +4035,10 @@ def announce_realtime_departure_now_approaching_intro(
     destinations: list[str],
     division: dict,
     announce_attention: bool,
+    platform_alteration: bool,
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
-    platform_alteration = service["locationDetail"].get("platformChanged")
     platform, plat_int, plat_letter = get_platform_and_int(service)
 
     if (
@@ -4093,10 +4145,10 @@ def announce_realtime_departure_now_standing_intro(
     destinations: list[str],
     division: dict,
     announce_attention: bool,
+    platform_alteration: bool,
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
-    platform_alteration = service["locationDetail"].get("platformChanged")
     platform, plat_int, plat_letter = get_platform_and_int(service)
 
     if announce_attention:
@@ -4180,10 +4232,10 @@ def announce_realtime_departure_trust_triggered_intro(
     destinations: list[str],
     division: dict,
     announce_attention: bool,
+    platform_alteration: bool,
     now: datetime.datetime,
     wavplayer: WavPlayer
 ) -> None:
-    platform_alteration = service["locationDetail"].get("platformChanged")
     platform, plat_int, plat_letter = get_platform_and_int(service)
 
     if announce_attention:
@@ -4249,6 +4301,7 @@ def announce_realtime_departure_generic(
     destinations: list[str],
     division: dict,
     cancellation: dict,
+    platform_alteration: bool,
     intro_function: typing.Callable,
     now: datetime.datetime,
     repeat: bool,
@@ -4264,6 +4317,7 @@ def announce_realtime_departure_generic(
         destinations,
         division,
         not repeat,
+        platform_alteration,
         now,
         wavplayer
     )
@@ -4303,6 +4357,7 @@ def announce_realtime_departure_generic(
             destinations,
             division,
             False,
+            platform_alteration,
             now,
             wavplayer
         )
@@ -4316,6 +4371,7 @@ def announce_realtime_departure(
     destinations: list[str],
     division: dict,
     cancellation: dict,
+    platform_alteration: bool,
     now: datetime.datetime,
     repeat: bool,
     wavplayer: WavPlayer
@@ -4333,6 +4389,7 @@ def announce_realtime_departure(
             destinations,
             division,
             cancellation,
+            platform_alteration,
             announce_realtime_departure_next_train_intro,
             now,
             repeat,
@@ -4350,6 +4407,7 @@ def announce_realtime_departure(
             destinations,
             division,
             cancellation,
+            platform_alteration,
             announce_realtime_departure_now_approaching_intro,
             now,
             repeat,
@@ -4368,6 +4426,7 @@ def announce_realtime_departure(
             destinations,
             division,
             cancellation,
+            platform_alteration,
             announce_realtime_departure_now_standing_intro,
             now,
             repeat,
@@ -4386,6 +4445,7 @@ def announce_realtime_departure_trust_triggered(
     destinations: list[str],
     division: dict,
     cancellation: dict,
+    platform_alteration: bool,
     now: datetime.datetime,
     repeat: bool,
     wavplayer: WavPlayer
@@ -4400,6 +4460,7 @@ def announce_realtime_departure_trust_triggered(
         destinations,
         division,
         cancellation,
+        platform_alteration,
         announce_realtime_departure_trust_triggered_intro,
         now,
         repeat,
@@ -4418,6 +4479,7 @@ def announce_realtime(
     destinations: list[str],
     division: dict,
     cancellation: dict,
+    platform_alteration: bool,
     now: datetime.datetime,
     repeat: bool,
     wavplayer: WavPlayer
@@ -4428,7 +4490,14 @@ def announce_realtime(
         display_as in ("DESTINATION", "TERMINATES") and
         not division["joins_main_train"]
     ):
-        announce_realtime_arrival(config, service, origins, now, wavplayer)
+        announce_realtime_arrival(
+            config,
+            service,
+            origins,
+            platform_alteration,
+            now,
+            wavplayer
+        )
     else:
         announce_realtime_departure(
             config,
@@ -4438,6 +4507,7 @@ def announce_realtime(
             destinations,
             division,
             cancellation,
+            platform_alteration,
             now,
             repeat,
             wavplayer
@@ -4452,6 +4522,7 @@ def announce_realtime_trust_triggered(
     destinations: list[str],
     division: dict,
     cancellation: dict,
+    platform_alteration: bool,
     now: datetime.datetime,
     repeat: bool,
     wavplayer: WavPlayer
@@ -4466,6 +4537,7 @@ def announce_realtime_trust_triggered(
             config,
             service,
             origins,
+            platform_alteration,
             now,
             wavplayer
         )
@@ -4478,6 +4550,7 @@ def announce_realtime_trust_triggered(
             destinations,
             division,
             cancellation,
+            platform_alteration,
             now,
             repeat,
             wavplayer
@@ -4565,6 +4638,7 @@ def announce_services(
     config: dict,
     services: list[dict],
     service_last_announcement: dict,
+    service_platform_alteration: dict,
     safety_last_announcement: dict,
     now: datetime.datetime,
     wavplayer: WavPlayer
@@ -4596,7 +4670,10 @@ def announce_services(
             now
         )
 
-        should_do_departure_platform_alteration = (
+        (
+            is_departure_platform_alteration,
+            should_do_departure_platform_alteration
+        ) = (
             should_announce_departure_platform_alteration(
                 config,
                 service,
@@ -4606,7 +4683,10 @@ def announce_services(
             )
         )
 
-        should_do_arrival_platform_alteration = (
+        (
+            is_arrival_platform_alteration,
+            should_do_arrival_platform_alteration
+        ) = (
             should_announce_arrival_platform_alteration(
                 config,
                 service,
@@ -4614,6 +4694,22 @@ def announce_services(
                 now,
                 services
             )
+        )
+
+        platform_alteration = (
+            is_departure_platform_alteration or is_arrival_platform_alteration
+        )
+
+        if platform_alteration:
+            service_platform_alteration[
+                (service["serviceUid"], service["runDate"])
+            ] = platform_alteration
+
+        # If we ever announced a platform alteration, always announce the
+        # platform alteration blurb even if RTT changes its mind on whether or
+        # not there actually was one.
+        platform_alteration = service_platform_alteration.get(
+            (service["serviceUid"], service["runDate"]), False
         )
 
         should_do_realtime = should_announce_realtime(
@@ -4760,6 +4856,7 @@ def announce_services(
                 destinations,
                 division,
                 cancellation,
+                platform_alteration,
                 now,
                 False,
                 wavplayer
@@ -4773,6 +4870,7 @@ def announce_services(
                 destinations,
                 division,
                 cancellation,
+                platform_alteration,
                 now,
                 True,
                 wavplayer
@@ -4786,6 +4884,7 @@ def announce_services(
                 destinations,
                 division,
                 cancellation,
+                platform_alteration,
                 now,
                 False,
                 wavplayer
@@ -4799,6 +4898,7 @@ def announce_services(
                 destinations,
                 division,
                 cancellation,
+                platform_alteration,
                 now,
                 True,
                 wavplayer
@@ -4826,6 +4926,7 @@ def main() -> int:
     logging.getLogger().addHandler(handler)
 
     service_last_announcement = {}
+    service_platform_alteration = {}
     safety_last_announcement = {}
 
     wavplayer = WavPlayer(config)
@@ -4840,6 +4941,7 @@ def main() -> int:
             config,
             services,
             service_last_announcement,
+            service_platform_alteration,
             safety_last_announcement,
             now,
             wavplayer
