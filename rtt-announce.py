@@ -2734,10 +2734,18 @@ def calculate_dep_time_from_booked_dep(booked_dep: str) -> tuple[str, str]:
     return dep_hour, dep_min
 
 
-def calculate_announcement_dep_time(service: dict) -> tuple[str, str]:
-    booked_dep = service["locationDetail"].get("gbttBookedDeparture")
-    if not booked_dep:
-        booked_dep = service["locationDetail"].get("gbttBookedArrival")
+def calculate_announcement_dep_time(
+    config: dict,
+    service: dict,
+    train_content: dict,
+    arrival: bool
+) -> tuple[str, str]:
+    if config["general"]["arrivals_use_origin_time"] and arrival:
+        booked_dep = train_content["locations"][0].get("gbttBookedDeparture")
+    else:
+        booked_dep = service["locationDetail"].get("gbttBookedDeparture")
+        if not booked_dep:
+            booked_dep = service["locationDetail"].get("gbttBookedArrival")
 
     return calculate_dep_time_from_booked_dep(booked_dep)
 
@@ -2761,7 +2769,6 @@ def announce_cancellation(
     wavplayer: WavPlayer
 ) -> None:
     logging.info("Cancel")
-    dep_hour, dep_min = calculate_announcement_dep_time(service)
     cancel_reason = service["locationDetail"].get("cancelReasonCode")
     # TODO support portion working here?
     orig_destination = train_content["locations"][-1]["crs"]
@@ -2794,6 +2801,7 @@ def announce_cancellation(
         config,
         config["departures_delay"],
         service,
+        train_content,
         None,
         wavplayer,
         None,
@@ -2902,6 +2910,7 @@ def announce_delay_time(
 def announce_departure_delay(
     config: dict,
     service: dict,
+    train_content: dict,
     destinations: list[str],
     now: datetime.datetime,
     wavplayer: WavPlayer
@@ -2932,6 +2941,7 @@ def announce_departure_delay(
         config,
         config["departures_delay"],
         service,
+        train_content,
         now,
         wavplayer
     )
@@ -2979,6 +2989,7 @@ def announce_departure_delay(
 def announce_arrival_delay(
     config: dict,
     service: dict,
+    train_content: dict,
     origins: list[str],
     now: datetime.datetime,
     wavplayer: WavPlayer
@@ -3009,6 +3020,7 @@ def announce_arrival_delay(
         config,
         config["arrivals_delay"],
         service,
+        train_content,
         now,
         wavplayer,
         None,
@@ -3219,6 +3231,7 @@ def announce_time_and_toc(
     config: dict,
     sub_config: dict,
     service: dict,
+    train_content: dict,
     now: typing.Optional[datetime.datetime],
     wavplayer: WavPlayer,
     division: typing.Optional[dict] = None,
@@ -3237,7 +3250,12 @@ def announce_time_and_toc(
             booked_minute
         )
 
-    dep_hour, dep_min = calculate_announcement_dep_time(service)
+    dep_hour, dep_min = calculate_announcement_dep_time(
+        config,
+        service,
+        train_content,
+        service_from
+    )
     if division and division["joining_train_here_departs"]:
         dep_hour, dep_min = calculate_dep_time_from_booked_dep(
             division["joining_train_here_departs"]
@@ -3279,6 +3297,7 @@ def announce_departure_platform_alteration_intro(
     config: dict,
     sub_config: dict,
     service: dict,
+    train_content: dict,
     destinations: list[str],
     division: typing.Optional[dict],
     announce_attention: bool,
@@ -3295,6 +3314,7 @@ def announce_departure_platform_alteration_intro(
         config,
         sub_config,
         service,
+        train_content,
         now,
         wavplayer,
         division
@@ -3312,6 +3332,7 @@ def announce_arrival_platform_alteration_intro(
     config: dict,
     sub_config: dict,
     service: dict,
+    train_content: dict,
     origins: list[str],
     announce_attention: bool,
     now: datetime.datetime,
@@ -3327,6 +3348,7 @@ def announce_arrival_platform_alteration_intro(
         config,
         sub_config,
         service,
+        train_content,
         now,
         wavplayer,
         None,
@@ -3341,6 +3363,7 @@ def announce_platform_intro(
     config: dict,
     sub_config: dict,
     service: dict,
+    train_content: dict,
     destinations: list[str],
     division: typing.Optional[dict],
     no_platform_files: list[str],
@@ -3379,6 +3402,7 @@ def announce_platform_intro(
         config,
         sub_config,
         service,
+        train_content,
         now,
         wavplayer,
         division
@@ -3389,6 +3413,7 @@ def announce_platform_intro(
 def announce_departure_platform_alteration(
     config: dict,
     service: dict,
+    train_content: dict,
     destinations: list[str],
     division: dict,
     now: datetime.datetime,
@@ -3402,6 +3427,7 @@ def announce_departure_platform_alteration(
         config,
         config["departures_platform_alteration"],
         service,
+        train_content,
         destinations,
         division,
         True,
@@ -3415,6 +3441,7 @@ def announce_departure_platform_alteration(
             config,
             config["departures_platform_alteration"],
             service,
+            train_content,
             destinations,
             division,
             None,
@@ -3429,6 +3456,7 @@ def announce_departure_platform_alteration(
 def announce_arrival_platform_alteration(
     config: dict,
     service: dict,
+    train_content: dict,
     origins: list[str],
     now: datetime.datetime,
     wavplayer: WavPlayer
@@ -3441,6 +3469,7 @@ def announce_arrival_platform_alteration(
         config,
         config["arrivals_platform_alteration"],
         service,
+        train_content,
         origins,
         True,
         now,
@@ -3458,6 +3487,7 @@ def announce_arrival_platform_alteration(
 def announce_realtime_arrival_next_train_intro(
     config: dict,
     service: dict,
+    train_content: dict,
     origins: list[str],
     platform_alteration: bool,
     now: datetime.datetime,
@@ -3481,6 +3511,7 @@ def announce_realtime_arrival_next_train_intro(
             config,
             config["arrivals_next_train"],
             service,
+            train_content,
             origins,
             True,
             now,
@@ -3526,6 +3557,7 @@ def announce_realtime_arrival_next_train_intro(
 def announce_realtime_arrival_trust_triggered_intro(
     config: dict,
     service: dict,
+    train_content: dict,
     origins: list[str],
     platform_alteration: bool,
     now: datetime.datetime,
@@ -3545,6 +3577,7 @@ def announce_realtime_arrival_trust_triggered_intro(
             config,
             config["arrivals_trust_triggered"],
             service,
+            train_content,
             origins,
             True,
             now,
@@ -3582,6 +3615,7 @@ def announce_realtime_arrival_trust_triggered_intro(
 def announce_realtime_arrival_now_approaching_intro(
     config: dict,
     service: dict,
+    train_content: dict,
     origins: list[str],
     platform_alteration: bool,
     now: datetime.datetime,
@@ -3601,6 +3635,7 @@ def announce_realtime_arrival_now_approaching_intro(
             config,
             config["arrivals_now_approaching"],
             service,
+            train_content,
             origins,
             True,
             now,
@@ -3662,6 +3697,7 @@ def announce_this_is(
 def announce_realtime_arrival_now_standing_intro(
     config: dict,
     service: dict,
+    train_content: dict,
     origins: list[str],
     platform_alteration: bool,
     now: datetime.datetime,
@@ -3688,6 +3724,7 @@ def announce_realtime_arrival_now_standing_intro(
             config,
             config["arrivals_now_standing"],
             service,
+            train_content,
             origins,
             True,
             now,
@@ -3715,6 +3752,7 @@ def announce_realtime_arrival_now_standing_intro(
 def announce_realtime_arrival(
     config: dict,
     service: dict,
+    train_content: dict,
     origins: list[str],
     platform_alteration: bool,
     now: datetime.datetime,
@@ -3727,6 +3765,7 @@ def announce_realtime_arrival(
         announce_realtime_arrival_next_train_intro(
             config,
             service,
+            train_content,
             origins,
             platform_alteration,
             now,
@@ -3738,6 +3777,7 @@ def announce_realtime_arrival(
         announce_realtime_arrival_now_approaching_intro(
             config,
             service,
+            train_content,
             origins,
             platform_alteration,
             now,
@@ -3749,6 +3789,7 @@ def announce_realtime_arrival(
         announce_realtime_arrival_now_standing_intro(
             config,
             service,
+            train_content,
             origins,
             platform_alteration,
             now,
@@ -3771,6 +3812,7 @@ def announce_realtime_arrival(
 def announce_realtime_arrival_trust_triggered(
     config: dict,
     service: dict,
+    train_content: dict,
     origins: list[str],
     platform_alteration: bool,
     now: datetime.datetime,
@@ -3779,6 +3821,7 @@ def announce_realtime_arrival_trust_triggered(
     announce_realtime_arrival_trust_triggered_intro(
         config,
         service,
+        train_content,
         origins,
         platform_alteration,
         now,
@@ -3928,6 +3971,7 @@ def announce_realtime_departure_next_train_intro(
     config: dict,
     sub_config: dict,
     service: dict,
+    train_content: dict,
     destinations: list[str],
     division: dict,
     announce_attention: bool,
@@ -3945,6 +3989,7 @@ def announce_realtime_departure_next_train_intro(
             config,
             sub_config,
             service,
+            train_content,
             destinations,
             division,
             announce_attention,
@@ -4010,6 +4055,7 @@ def announce_realtime_departure_next_train_intro(
                 config,
                 sub_config,
                 service,
+                train_content,
                 now,
                 wavplayer,
                 division
@@ -4020,6 +4066,7 @@ def announce_realtime_departure_next_train_intro(
                 config,
                 sub_config,
                 service,
+                train_content,
                 destinations,
                 division,
                 ["s/the next train is the.wav"],
@@ -4032,6 +4079,7 @@ def announce_realtime_departure_now_approaching_intro(
     config: dict,
     sub_config: dict,
     service: dict,
+    train_content: dict,
     destinations: list[str],
     division: dict,
     announce_attention: bool,
@@ -4049,6 +4097,7 @@ def announce_realtime_departure_now_approaching_intro(
             config,
             sub_config,
             service,
+            train_content,
             destinations,
             division,
             announce_attention,
@@ -4108,6 +4157,7 @@ def announce_realtime_departure_now_approaching_intro(
                 config,
                 sub_config,
                 service,
+                train_content,
                 now,
                 wavplayer,
                 division
@@ -4119,6 +4169,7 @@ def announce_realtime_departure_now_approaching_intro(
                     config,
                     sub_config,
                     service,
+                    train_content,
                     destinations,
                     division,
                     ["s/the train now approaching.wav", "m/is the.wav"],
@@ -4130,6 +4181,7 @@ def announce_realtime_departure_now_approaching_intro(
                     config,
                     sub_config,
                     service,
+                    train_content,
                     destinations,
                     division,
                     ["s/the train now approaching is the.wav"],
@@ -4142,6 +4194,7 @@ def announce_realtime_departure_now_standing_intro(
     config: dict,
     sub_config: dict,
     service: dict,
+    train_content: dict,
     destinations: list[str],
     division: dict,
     announce_attention: bool,
@@ -4186,6 +4239,7 @@ def announce_realtime_departure_now_standing_intro(
             config,
             sub_config,
             service,
+            train_content,
             destinations,
             division,
             announce_attention,
@@ -4207,6 +4261,7 @@ def announce_realtime_departure_now_standing_intro(
                 config,
                 sub_config,
                 service,
+                train_content,
                 now,
                 wavplayer,
                 division
@@ -4217,6 +4272,7 @@ def announce_realtime_departure_now_standing_intro(
                 config,
                 sub_config,
                 service,
+                train_content,
                 destinations,
                 division,
                 ["s/the train now standing at this station is the.wav"],
@@ -4229,6 +4285,7 @@ def announce_realtime_departure_trust_triggered_intro(
     config: dict,
     sub_config: dict,
     service: dict,
+    train_content: dict,
     destinations: list[str],
     division: dict,
     announce_attention: bool,
@@ -4273,6 +4330,7 @@ def announce_realtime_departure_trust_triggered_intro(
             config,
             sub_config,
             service,
+            train_content,
             destinations,
             division,
             announce_attention,
@@ -4284,6 +4342,7 @@ def announce_realtime_departure_trust_triggered_intro(
             config,
             sub_config,
             service,
+            train_content,
             destinations,
             division,
             ["s/the next train is the.wav"],
@@ -4296,6 +4355,7 @@ def announce_realtime_departure_generic(
     config: dict,
     sub_config: dict,
     service: dict,
+    train_content: dict,
     all_calling_points: dict,
     origins: list[str],
     destinations: list[str],
@@ -4314,6 +4374,7 @@ def announce_realtime_departure_generic(
         config,
         sub_config,
         service,
+        train_content,
         destinations,
         division,
         not repeat,
@@ -4354,6 +4415,7 @@ def announce_realtime_departure_generic(
             config,
             sub_config,
             service,
+            train_content,
             destinations,
             division,
             False,
@@ -4366,6 +4428,7 @@ def announce_realtime_departure_generic(
 def announce_realtime_departure(
     config: dict,
     service: dict,
+    train_content: dict,
     all_calling_points: dict,
     origins: list[str],
     destinations: list[str],
@@ -4384,6 +4447,7 @@ def announce_realtime_departure(
             config,
             config["departures_next_train"],
             service,
+            train_content,
             all_calling_points,
             origins,
             destinations,
@@ -4402,6 +4466,7 @@ def announce_realtime_departure(
             config,
             config["departures_now_approaching"],
             service,
+            train_content,
             all_calling_points,
             origins,
             destinations,
@@ -4421,6 +4486,7 @@ def announce_realtime_departure(
             config,
             config["departures_now_standing"],
             service,
+            train_content,
             all_calling_points,
             origins,
             destinations,
@@ -4440,6 +4506,7 @@ def announce_realtime_departure(
 def announce_realtime_departure_trust_triggered(
     config: dict,
     service: dict,
+    train_content: dict,
     all_calling_points: dict,
     origins: list[str],
     destinations: list[str],
@@ -4455,6 +4522,7 @@ def announce_realtime_departure_trust_triggered(
         config,
         config["departures_trust_triggered"],
         service,
+        train_content,
         all_calling_points,
         origins,
         destinations,
@@ -4474,6 +4542,7 @@ def announce_realtime_departure_trust_triggered(
 def announce_realtime(
     config: dict,
     service: dict,
+    train_content: dict,
     all_calling_points: dict,
     origins: list[str],
     destinations: list[str],
@@ -4493,6 +4562,7 @@ def announce_realtime(
         announce_realtime_arrival(
             config,
             service,
+            train_content,
             origins,
             platform_alteration,
             now,
@@ -4502,6 +4572,7 @@ def announce_realtime(
         announce_realtime_departure(
             config,
             service,
+            train_content,
             all_calling_points,
             origins,
             destinations,
@@ -4517,6 +4588,7 @@ def announce_realtime(
 def announce_realtime_trust_triggered(
     config: dict,
     service: dict,
+    train_content: dict,
     all_calling_points: dict,
     origins: list[str],
     destinations: list[str],
@@ -4536,6 +4608,7 @@ def announce_realtime_trust_triggered(
         announce_realtime_arrival_trust_triggered(
             config,
             service,
+            train_content,
             origins,
             platform_alteration,
             now,
@@ -4545,6 +4618,7 @@ def announce_realtime_trust_triggered(
         announce_realtime_departure_trust_triggered(
             config,
             service,
+            train_content,
             all_calling_points,
             origins,
             destinations,
@@ -4703,9 +4777,9 @@ def announce_services(
         if platform_alteration:
             service_platform_alteration[
                 (service["serviceUid"], service["runDate"])
-            ] = platform_alteration
+            ] = True
 
-        # If we ever announced a platform alteration, always announce the
+        # If we've ever announced a platform alteration, always announce the
         # platform alteration blurb even if RTT changes its mind on whether or
         # not there actually was one.
         platform_alteration = service_platform_alteration.get(
@@ -4807,6 +4881,7 @@ def announce_services(
             announce_departure_delay(
                 config,
                 service,
+                train_content,
                 destinations,
                 now,
                 wavplayer
@@ -4816,6 +4891,7 @@ def announce_services(
             announce_arrival_delay(
                 config,
                 service,
+                train_content,
                 origins,
                 now,
                 wavplayer
@@ -4832,6 +4908,7 @@ def announce_services(
             announce_departure_platform_alteration(
                 config,
                 service,
+                train_content,
                 destinations,
                 division,
                 now,
@@ -4842,6 +4919,7 @@ def announce_services(
             announce_arrival_platform_alteration(
                 config,
                 service,
+                train_content,
                 origins,
                 now,
                 wavplayer
@@ -4851,6 +4929,7 @@ def announce_services(
             announce_realtime(
                 config,
                 service,
+                train_content,
                 all_calling_points,
                 origins,
                 destinations,
@@ -4865,6 +4944,7 @@ def announce_services(
             announce_realtime(
                 config,
                 service,
+                train_content,
                 all_calling_points,
                 origins,
                 destinations,
@@ -4879,6 +4959,7 @@ def announce_services(
             announce_realtime_trust_triggered(
                 config,
                 service,
+                train_content,
                 all_calling_points,
                 origins,
                 destinations,
@@ -4893,6 +4974,7 @@ def announce_services(
             announce_realtime_trust_triggered(
                 config,
                 service,
+                train_content,
                 all_calling_points,
                 origins,
                 destinations,

@@ -36,6 +36,10 @@ replacement_buses = "front"
 # division point
 reverse_division = false
 
+# Announce arriving trains using the departure time from their origin rather
+# than the arrival time at their destination
+arrivals_use_origin_time = true
+
 # Try to play announcements even if the destination station is not present.
 # Note that if replacement buses are enabled, this can result in some very
 # broken announcements for scheduled buses in the railway timetable, which
