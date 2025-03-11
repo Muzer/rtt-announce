@@ -3102,7 +3102,7 @@ def announce_cancellation(
         booked_arr == train_content["locations"][-1].get("gbttBookedArrival")
     ):
         arrival = True
-    if not arrival and "gbttBookedDeparture" in service["locationDetail"]:
+    if not arrival and "gbttBookedDeparture" not in service["locationDetail"]:
         set_down_only = True
 
     if orig_destination in station_map[config["general"]["voice"]]:
