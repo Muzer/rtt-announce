@@ -83,7 +83,7 @@ departures_now_standing = true
 # actual arrival time, an actual platform, or both. You should set this to
 # false if your station has functioning "approaching/arriving/at platform"
 # logic. However if you don't get realtime announcements, try setting this to
-# true (and the arrivals version below if desired)).
+# true (and the arrivals/set down only versions below if desired).
 departures_trust_triggered = false
 
 # The following are the equivalent for terminating arrivals. The "now standing"
@@ -94,6 +94,13 @@ arrivals_next_train = true
 arrivals_now_approaching = true
 arrivals_now_standing = true
 arrivals_trust_triggered = false
+
+# The following are the equivalent for trains which stop to set down only —
+# they are announced similarly but not identically to arrivals.
+set_down_only_next_train = true
+set_down_only_now_approaching = true
+set_down_only_now_standing = true
+set_down_only_trust_triggered = false
 
 # Announce when a train is cancelled.
 cancellation = true
@@ -121,6 +128,12 @@ departures_platform_alteration = true
 # authentic script as I don't recall ever hearing one.
 arrivals_delay = true
 arrivals_platform_alteration = true
+
+# Set down only equivalents to the above. Note: no replacement bus set down
+# only announcements will be implemented unless someone can find an authentic
+# script as I don't recall ever hearing one.
+set_down_only_delay = true
+set_down_only_platform_alteration = true
 
 # Perform general safety announcements.
 safety = true
@@ -468,6 +481,149 @@ all_change = true
 # Announce again that the train terminates
 repeat_terminates = true
 
+[set_down_only_next_train]
+# Announce trains even when no platform is available. This is often true with
+# RTT API data for VSTP workings and some more minor stations, due to source
+# data limitations
+no_platform = true
+
+# Play a chime before these announcements
+chime = true
+
+# Include the phrase "to arrive" in the script ("The next train to arrive" vs
+# just "the next train").
+to_arrive = false
+
+# Announce platform alterations.
+platform_alterations = true
+
+# Announce the TOC in platform alterations. Alternative is Chiltern-style, to
+# just say "service to".
+toc = true
+
+# Use the word "delayed" in reference to delayed trains in platform alterations
+delayed = true
+
+# Number of minutes' delay for a train to qualify as "delayed" for the purposes
+# of this particular announcement
+delay_threshold = 5
+
+# Announce the origin of the train in this announcement
+service_from = true
+
+# Announce again that the train stops to set down only
+repeat_sets_down = true
+
+# Include the word "passengers"
+passengers = false
+
+[set_down_only_now_approaching]
+# Announce trains even when no platform is available. This is often true with
+# RTT API data for VSTP workings and some more minor stations, due to source
+# data limitations
+no_platform = true
+
+# Play a chime before these announcements
+chime = false
+
+# Announce platform alterations.
+platform_alterations = false
+
+# Announce the TOC in platform alterations. Alternative is Chiltern-style, to
+# just say "service to".
+toc = true
+
+# Use the word "delayed" in reference to delayed trains in platform alterations
+delayed = true
+
+# Number of minutes' delay for a train to qualify as "delayed" for the purposes
+# of this particular announcement
+delay_threshold = 5
+
+# Announce the origin of the train in this announcement
+service_from = true
+
+# Announce again that the train stops to set down only
+repeat_sets_down = true
+
+# Include the word "passengers"
+passengers = false
+
+[set_down_only_now_standing]
+# Announce trains even when no platform is available. This is often true with
+# RTT API data for VSTP workings and some more minor stations, due to source
+# data limitations
+no_platform = true
+
+# Play a chime before these announcements
+chime = true
+
+# Play "X, this is X" on train-now-standing announcements. Set to false for
+# authentic SWT experience.
+this_is = true
+
+# Announce platform alterations.
+platform_alterations = false
+
+# Announce the TOC in platform alterations. Alternative is Chiltern-style, to
+# just say "service to".
+toc = true
+
+# Use the word "delayed" in reference to delayed trains in platform alterations
+delayed = true
+
+# Number of minutes' delay for a train to qualify as "delayed" for the purposes
+# of this particular announcement
+delay_threshold = 5
+
+# Announce the origin of the train in this announcement
+service_from = true
+
+# Announce again that the train stops to set down only
+repeat_sets_down = true
+
+# Include the word "passengers"
+passengers = false
+
+# Number of times to repeat "please stand clear; this train is stopping to set"
+# down passengers only" for joining trains. Can be set to 0.
+stand_clear = 1
+
+[set_down_only_trust_triggered]
+# Announce trains even when no platform is available. This is often true with
+# RTT API data for VSTP workings and some more minor stations, due to source
+# data limitations
+no_platform = true
+
+# Play a chime before these announcements
+chime = true
+
+# Play "X, this is X" on train-now-standing announcements.
+this_is = true
+
+# Announce platform alterations.
+platform_alterations = true
+
+# Announce the TOC in platform alterations. Alternative is Chiltern-style, to
+# just say "service to".
+toc = true
+
+# Use the word "delayed" in reference to delayed trains in platform alterations
+delayed = true
+
+# Number of minutes' delay for a train to qualify as "delayed" for the purposes
+# of this particular announcement
+delay_threshold = 5
+
+# Announce the origin of the train in this announcement
+service_from = true
+
+# Announce again that the train stops to set down only
+repeat_sets_down = true
+
+# Include the word "passengers"
+passengers = false
+
 [cancellation]
 # Announce all cancellations before the scheduled time, even if the cutoff time
 # (in minutes_before below) has not yet been reached
@@ -662,6 +818,78 @@ apologise_after_threshold = 0
 # announcement
 extremely_apologise_after_threshold = 60
 
+[set_down_only_delay]
+# Announce all delays before the scheduled arrival, even if the cutoff time
+# (in minutes_before below) has not yet been reached
+always_announce_before = false
+
+# Announce all time-based repeat announcements before the scheduled arrival,
+# even if the cutoff time (in minutes_before below) has not yet been reached
+always_repeat_before = false
+
+# Announce all delays after the scheduled arrival, even if the cutoff time
+# (in minutes_after below) has been surpassed. Note that disabling this will
+# lead to missed delay announcements for medium and long delays.
+always_announce_after = true
+
+# Announce all time-based repeat announcements after the scheduled arrival,
+# even if the cutoff time (in minutes_before below) has been surpassed
+always_repeat_after = true
+
+# Re-announce delays at specific times before/after arrival, even if they
+# have already been announced before
+timed_announcements = true
+
+# Number of minutes before arrival to start announcing (or re-announcing)
+# delays.
+minutes_before = 10
+
+# Number of minutes after scheduled arrival to make the last delay
+# announcement
+minutes_after = 9
+
+# Interval between delay announcements between the two times above
+interval = 5
+
+# Announce an updated delay immediately, even if the time interval has not yet
+# passed
+announce_updated_delays = true
+
+# Threshold under which not to bother with a delay announcement
+delay_threshold = 5
+
+# Announce "is being delayed" for delayed trains when passed realtime arrival
+being_delayed = true
+
+# Announce "is being delayed" for trains when passed realtime arrival, even
+# if train is not otherwise delayed enough for an announcement (as long as we
+# are delay_threshold minutes after scheduled arrival)
+being_delayed_undelayed = true
+
+# Play a chime before these announcements
+chime = true
+
+# Delay threshold after which to apologise at the start of the announcement
+apologise_before_threshold = 0
+
+# Announce the TOC. Alternative is Chiltern-style, to just say "service to".
+toc = true
+
+# Play "Please listen for further announcements" when there *is* a reason (not
+# implemented as no delay reasons available through RTT API due to source data
+# limitations)
+please_listen_reason = false
+
+# Play "Please listen for further announcements" when there is *not* a reason
+please_listen_no_reason = true
+
+# Delay threshold after which to apologise at the end of the announcement
+apologise_after_threshold = 0
+
+# Delay threshold after which to extremely apologise at the end of the
+# announcement
+extremely_apologise_after_threshold = 60
+
 [departures_bus]
 # Number of minutes before departure to announce the bus
 minutes_before = 5
@@ -691,6 +919,20 @@ delay_threshold = 5
 repeat = true
 
 [arrivals_platform_alteration]
+# Play a chime before these announcements
+chime = true
+
+# Announce the TOC. Alternative is Chiltern-style, to just say "service to".
+toc = true
+
+# Use the word "delayed" in reference to delayed trains.
+delayed = true
+
+# Number of minutes' delay for a train to qualify as "delayed" for the purposes
+# of this particular announcement
+delay_threshold = 5
+
+[set_down_only_platform_alteration]
 # Play a chime before these announcements
 chime = true
 

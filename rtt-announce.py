@@ -1160,6 +1160,12 @@ def load_config(filename: str) -> dict:
             enablements["arrivals_now_standing"] = False
             enablements["arrivals_trust_triggered"] = False
             enablements["arrivals_platform_alteration"] = False
+            enablements["set_down_only_next_train"] = False
+            enablements["set_down_only_now_approaching"] = False
+            enablements["set_down_only_now_standing"] = False
+            enablements["set_down_only_trust_triggered"] = False
+            enablements["set_down_only_platform_alteration"] = False
+            enablements["set_down_only_delay"] = False
             enablements["safety"] = False
             config["departures_next_train"]["no_platform"] = False
             config["departures_now_standing"]["now_standing_script"] = False
@@ -1266,6 +1272,18 @@ def get_realtime_hour_minute(
     return get_hour_minute(realtime_dep, now)
 
 
+def get_realtime_arrival_only_hour_minute(
+    service: dict,
+    now: datetime.datetime
+) -> tuple[int, int]:
+    realtime_arr = service["locationDetail"].get("realtimeArrival")
+    if not realtime_arr:
+        realtime_arr = service["locationDetail"].get("gbttBookedArrival")
+    if not realtime_arr:
+        return (None, None)
+    return get_hour_minute(realtime_arr, now)
+
+
 def get_delay(
     realtime_hour: int,
     realtime_minute: int,
@@ -1282,7 +1300,7 @@ def get_chunked_time(now_to_booked: int, interval: int) -> int:
     return ((now_to_booked - 1) // interval) * interval
 
 
-def is_departing(service: dict) -> bool:
+def is_departing_working(service: dict) -> bool:
     display_as = service["locationDetail"]["displayAs"]
 
     return display_as in ("CALL", "ORIGIN", "STARTS") or (
@@ -1295,10 +1313,20 @@ def is_departing(service: dict) -> bool:
     )
 
 
+def is_departing(service: dict) -> bool:
+    gbtt_departure = service["locationDetail"].get("gbttBookedDeparture")
+
+    return is_departing_working(service) and gbtt_departure
+
+
 def is_arriving(service: dict) -> bool:
     display_as = service["locationDetail"]["displayAs"]
 
-    return display_as != "CANCELLED_CALL" and not is_departing(service)
+    return display_as != "CANCELLED_CALL" and not is_departing_working(service)
+
+
+def is_set_down_only(service: dict) -> bool:
+    return is_departing_working(service) and not is_departing(service)
 
 
 def should_announce_departure_delay(
@@ -1312,6 +1340,7 @@ def should_announce_departure_delay(
     service_location = service["locationDetail"].get("serviceLocation")
     display_as = service["locationDetail"]["displayAs"]
     service_type = service["serviceType"]
+    gbtt_departure = service["locationDetail"].get("gbttBookedDeparture")
 
     booked_hour, booked_minute = get_booked_hour_minute(service, now)
     realtime_hour, realtime_minute = get_realtime_hour_minute(service, now)
@@ -1349,6 +1378,7 @@ def should_announce_departure_delay(
         # In this case, delays will be handled by the "parent" service so we
         # do actually want this, not is_departing
         display_as in ("CALL", "ORIGIN", "STARTS") and
+        gbtt_departure and
         (
             (
                 delay >= config["departures_delay"]["delay_threshold"] and
@@ -1511,6 +1541,115 @@ def should_announce_arrival_delay(
         (
             config["arrivals_delay"]["always_announce_after"] or
             -now_to_booked <= config["arrivals_delay"]["minutes_after"]
+        ) and
+        not service_location and
+        not realtime_arr_actual and
+        service_type == "train"
+    )
+
+
+def should_announce_set_down_only_delay(
+    config: dict,
+    service: dict,
+    service_last_announcement: dict,
+    now: datetime.datetime
+) -> bool:
+    uid = service["serviceUid"]
+    run_date = service["runDate"]
+    service_location = service["locationDetail"].get("serviceLocation")
+    display_as = service["locationDetail"]["displayAs"]
+    service_type = service["serviceType"]
+
+    booked_hour, booked_minute = get_booked_hour_minute(service, now)
+    realtime_hour, realtime_minute = get_realtime_arrival_only_hour_minute(
+        service,
+        now
+    )
+    if realtime_hour is None or realtime_minute is None:
+        return False
+
+    realtime_arr_actual = (
+        service["locationDetail"].get("realtimeArrivalActual")
+    )
+    if service["locationDetail"].get("realtimeArrivalNoReport"):
+        realtime_arr_actual = True
+
+    now_to_booked = time_diff(booked_hour, booked_minute, now)
+
+    delay = get_delay(
+        realtime_hour,
+        realtime_minute,
+        booked_hour,
+        booked_minute
+    )
+
+    interval = config["set_down_only_delay"]["interval"]
+    chunked_time = get_chunked_time(now_to_booked, interval)
+    if (uid, run_date) in service_last_announcement:
+        old_now_to_booked = service_last_announcement[(uid, run_date)][
+            "now_to_booked"
+        ]
+        old_chunked_time = get_chunked_time(old_now_to_booked, interval)
+
+    return (
+        config["announcements_enabled"]["set_down_only_delay"] and
+        # We use actual is_set_down_only here, we should probably suppress
+        # confusing announcements for joining trains.
+        is_set_down_only(service) and
+        (
+            (
+                delay >= config["set_down_only_delay"]["delay_threshold"] and
+                (
+                    delay + 1 >= -now_to_booked or
+                    config["set_down_only_delay"]["being_delayed"]
+                )
+            ) or
+            (
+                now_to_booked <=
+                -config["set_down_only_delay"]["delay_threshold"] and
+                config["set_down_only_delay"]["being_delayed_undelayed"]
+            )
+        ) and
+        (
+            (uid, run_date) not in service_last_announcement or
+            (
+                service_last_announcement[(uid, run_date)]["delay"] <
+                config["set_down_only_delay"]["delay_threshold"] and
+                delay > config["set_down_only_delay"]["delay_threshold"]
+            ) or
+            (
+                service_last_announcement[(uid, run_date)]["now_to_booked"] >
+                -config["set_down_only_delay"]["delay_threshold"] and
+                now_to_booked <=
+                -config["set_down_only_delay"]["delay_threshold"] and
+                config["set_down_only_delay"]["being_delayed_undelayed"]
+            ) or
+            (
+                config["set_down_only_delay"]["announce_updated_delays"] and 
+                service_last_announcement[(uid, run_date)]["delay"] != delay
+            ) or
+            (
+                config["set_down_only_delay"]["timed_announcements"] and
+                chunked_time != old_chunked_time and
+                (
+                    config["set_down_only_delay"]["always_repeat_before"] or
+                    now_to_booked <=
+                    config["set_down_only_delay"]["minutes_before"]
+                ) and
+                (
+                    config["set_down_only_delay"]["always_repeat_after"] or
+                    -now_to_booked <=
+                    config["set_down_only_delay"]["minutes_after"]
+                )
+            )
+        ) and
+        (
+            config["set_down_only_delay"]["always_announce_before"] or
+            now_to_booked <= config["set_down_only_delay"]["minutes_before"]
+        ) and
+        (
+            config["set_down_only_delay"]["always_announce_after"] or
+            -now_to_booked <= config["set_down_only_delay"]["minutes_after"]
         ) and
         not service_location and
         not realtime_arr_actual and
@@ -1794,6 +1933,128 @@ def should_announce_arrival_platform_alteration(
     )
 
 
+def should_announce_set_down_only_platform_alteration(
+    config: dict,
+    service: dict,
+    service_last_announcement: dict,
+    now: datetime.datetime,
+    services: list[dict]
+) -> tuple[bool, bool]:
+    uid = service["serviceUid"]
+    run_date = service["runDate"]
+    display_as = service["locationDetail"]["displayAs"]
+    platform_alteration = service["locationDetail"].get("platformChanged")
+    service_location = service["locationDetail"].get("serviceLocation")
+    platform = service["locationDetail"].get("platform")
+
+    realtime_dep_actual = (
+        service["locationDetail"].get("realtimeDepartureActual")
+    )
+    if realtime_dep_actual is None:
+        realtime_dep_actual = (
+            service["locationDetail"].get("realtimeArrivalActual")
+        )
+    if service["locationDetail"].get("realtimeDepartureNoReport"):
+        realtime_dep_actual = True
+
+    is_alteration = (
+        # We do want is_set_down_only here, as a platform alteration on the
+        # joining portion will usually indicate one for the whole train.
+        is_set_down_only(service) and
+        (
+            (
+                platform_alteration and
+                (uid, run_date) not in service_last_announcement
+            ) or
+            (
+                platform_alteration and
+                not service_last_announcement[
+                    (uid, run_date)
+                ]["platform_alteration"]
+            ) or
+            (
+                (uid, run_date) in service_last_announcement and
+                service_last_announcement[
+                    (uid, run_date)
+                ]["platform_alteration"] and
+                platform != service_last_announcement[
+                    (uid, run_date)
+                ]["platform"]
+            )
+        ) and
+        not realtime_dep_actual
+    )
+
+    return (
+        is_alteration,
+        is_alteration and
+        # if realtime announcements are enabled with platform alterations and
+        # we are about to make one of those, suppress the platform alteration
+        # as it will just duplicate information. TODO maybe revise this once
+        # we get multiple announcement channels.
+        (
+            service_location != "APPR_STAT" or
+            not config["announcements_enabled"]["set_down_only_next_train"] or
+            not config["set_down_only_next_train"]["platform_alterations"] or
+            not should_announce_realtime(
+                config,
+                service,
+                service_last_announcement,
+                now,
+                services
+            )
+        ) and
+        (
+            service_location != "APPR_PLAT" or
+            not config["announcements_enabled"][
+                "set_down_only_now_approaching"
+            ] or
+            not config["set_down_only_now_approaching"][
+                "platform_alterations"
+            ] or
+            not should_announce_realtime(
+                config,
+                service,
+                service_last_announcement,
+                now,
+                services
+            )
+        ) and
+        (
+            not (
+                service_location == "AT_PLAT" or
+                (
+                    not service_location and
+                    (uid, run_date) in service_last_announcement and
+                    service_last_announcement.get((uid, run_date))[
+                        "service_location"
+                    ]
+                )
+            ) or
+            not config["announcements_enabled"][
+                "set_down_only_now_standing"
+            ] or
+            not config["set_down_only_now_standing"]["platform_alterations"] or
+            not should_announce_realtime(
+                config,
+                service,
+                service_last_announcement,
+                now,
+                services
+            )
+        ) and
+        (
+            display_as != "ORIGIN" or
+            "associations" not in service["locationDetail"] or
+            "divide" not in [
+                assoc["type"] for
+                assoc in service["locationDetail"]["associations"]
+            ] or
+            not assoc_service_has_location(service, services)
+        )
+    )
+
+
 def assoc_service_has_location(
     service: dict,
     services: list[dict]
@@ -1864,6 +2125,15 @@ def should_announce_realtime(
                 )
             ) or
             (
+                is_set_down_only(service) and
+                config["announcements_enabled"]["set_down_only_next_train"] and
+                service_location == "APPR_STAT" and
+                (
+                    platform or
+                    config["set_down_only_next_train"]["no_platform"]
+                )
+            ) or
+            (
                 is_departing(service) and
                 config["announcements_enabled"][
                     "departures_now_approaching"
@@ -1881,6 +2151,17 @@ def should_announce_realtime(
                 (
                     platform or
                     config["arrivals_now_approaching"]["no_platform"]
+                )
+            ) or
+            (
+                is_set_down_only(service) and
+                config["announcements_enabled"][
+                    "set_down_only_now_approaching"
+                ] and
+                service_location == "APPR_PLAT" and
+                (
+                    platform or
+                    config["set_down_only_now_approaching"]["no_platform"]
                 )
             ) or
             (
@@ -1920,6 +2201,27 @@ def should_announce_realtime(
                 (
                     platform or
                     config["arrivals_now_standing"]["no_platform"]
+                )
+            ) or
+            (
+                is_set_down_only(service) and
+                config["announcements_enabled"][
+                    "set_down_only_now_standing"
+                ] and
+                (
+                    service_location == "AT_PLAT" or
+                    (
+                        not service_location and
+                        (uid, run_date) in service_last_announcement and
+                        service_last_announcement.get((uid, run_date))[
+                            "service_location"
+                        ] and
+                        not realtime_dep_actual
+                    )
+                ) and
+                (
+                    platform or
+                    config["set_down_only_now_standing"]["no_platform"]
                 )
             )
         ) and
@@ -2061,6 +2363,18 @@ def should_announce_realtime_trust_triggered(
                     platform or
                     config["arrivals_trust_triggered"]["no_platform"]
                 )
+            ) or
+            (
+                is_set_down_only(service) and
+                config["announcements_enabled"][
+                    "set_down_only_trust_triggered"
+                ] and
+                (realtime_arr_actual or plat_actual) and
+                (
+                    platform or
+                    config["set_down_only_trust_triggered"]["no_platform"]
+                ) and
+                not realtime_dep_actual
             )
         ) and
         (
@@ -2077,7 +2391,12 @@ def should_announce_realtime_trust_triggered(
                     config["announcements_enabled"][
                         "departures_trust_triggered"
                     ] or
-                    config["announcements_enabled"]["arrivals_trust_triggered"]
+                    config["announcements_enabled"][
+                        "arrivals_trust_triggered"
+                    ] or
+                    config["announcements_enabled"][
+                        "set_down_only_trust_triggered"
+                    ]
                 )
             )
         ) and
@@ -2336,7 +2655,7 @@ def handle_divisions(
                 pp = pprint.PrettyPrinter(indent=4)
                 logging.debug(pp.pformat(dividing_train_content))
 
-                # Possible with some divide-to-ECS
+                # Possible with some divide-to-ECS. TODO handle better?
                 if "locations" not in dividing_train_content:
                     continue
 
@@ -2481,7 +2800,7 @@ def handle_main_train_attachments(
                 pp = pprint.PrettyPrinter(indent=4)
                 logging.debug(pp.pformat(joining_train_content))
 
-                # Possible with some divide-to-ECS
+                # Possible with some join-to-ECS
                 if "locations" not in joining_train_content:
                     continue
 
@@ -2777,11 +3096,14 @@ def announce_cancellation(
     booked_arr = service["locationDetail"].get("gbttBookedArrival")
 
     arrival = False
+    set_down_only = False
     if (
         orig_destination == config["general"]["station"] and
         booked_arr == train_content["locations"][-1].get("gbttBookedArrival")
     ):
         arrival = True
+    if not arrival and "gbttBookedDeparture" in service["locationDetail"]:
+        set_down_only = True
 
     if orig_destination in station_map[config["general"]["voice"]]:
         orig_destination = station_map[config["general"]["voice"]][
@@ -2805,9 +3127,9 @@ def announce_cancellation(
         None,
         wavplayer,
         None,
-        arrival
+        arrival or set_down_only
     )
-    if arrival:
+    if arrival or set_down_only:
         wavplayer.play_wav(f"station/m/{orig_origin}.wav")
     else:
         wavplayer.play_wav(f"station/m/{orig_destination}.wav")
@@ -2823,6 +3145,11 @@ def announce_cancellation(
             wavplayer.play_wav(
                 "w/this train was due to terminate at this station.wav"
             )
+        if set_down_only and not config["general"]["voice"] == "Female2":
+            time.sleep(0.7)
+            wavplayer.play_wav(
+                "w/this train was due to set down passengers only.wav"
+            )
         if config["cancellation"]["please_listen_reason"]:
             time.sleep(0.7)
             wavplayer.play_wav(
@@ -2835,6 +3162,11 @@ def announce_cancellation(
             wavplayer.play_wav(
                 "w/this train was due to terminate at this station.wav"
             )
+        if set_down_only and not config["general"]["voice"] == "Female2":
+            time.sleep(0.7)
+            wavplayer.play_wav(
+                "w/this train was due to set down passengers only.wav"
+            )
         if config["cancellation"]["please_listen_no_reason"]:
             time.sleep(0.7)
             wavplayer.play_wav(
@@ -2843,7 +3175,7 @@ def announce_cancellation(
 
     if config["cancellation"]["apologise_after"]:
         time.sleep(0.7)
-        if arrival or config["general"]["voice"] == "Female2":
+        if set_down_only or arrival or config["general"]["voice"] == "Female2":
             wavplayer.play_wav(
                 "w/we apologise for the inconvenience caused.wav"
             )
@@ -3056,6 +3388,94 @@ def announce_arrival_delay(
     elif (
         config["arrivals_delay"]["apologise_after_threshold"] > -1 and
         delay >= config["arrivals_delay"]["apologise_after_threshold"]
+    ):
+        time.sleep(0.7)
+        if config["general"]["voice"] == "Female2":
+            wavplayer.play_wav(
+                "w/we apologise for the inconvenience caused.wav"
+            )
+        else:
+            wavplayer.play_wav(
+                "w/were sorry for the delay to this service.wav"
+            )
+
+    # after playing an announcement we want a gap to the next one
+    time.sleep(config["general"]["announcement_delay"])
+
+
+def announce_set_down_only_delay(
+    config: dict,
+    service: dict,
+    train_content: dict,
+    origins: list[str],
+    now: datetime.datetime,
+    wavplayer: WavPlayer
+) -> None:
+    logging.info("Set down only delay")
+    booked_hour, booked_minute = get_booked_hour_minute(service, now)
+    realtime_hour, realtime_minute = get_realtime_arrival_only_hour_minute(
+        service,
+        now
+    )
+
+    now_to_booked = time_diff(booked_hour, booked_minute, now)
+
+    delay = get_delay(
+        realtime_hour,
+        realtime_minute,
+        booked_hour,
+        booked_minute
+    )
+
+    play_chime(config, config["set_down_only_delay"], wavplayer)
+
+    if (
+        config["set_down_only_delay"]["apologise_before_threshold"] > -1 and
+        delay >= config["set_down_only_delay"]["apologise_before_threshold"]
+    ):
+        wavplayer.play_wav("s/were sorry to announce that the.wav")
+    else:
+        wavplayer.play_wav("s/the.wav")
+    announce_time_and_toc(
+        config,
+        config["set_down_only_delay"],
+        service,
+        train_content,
+        now,
+        wavplayer,
+        None,
+        True
+    )
+    announce_destinations(origins, False, wavplayer)
+    if (delay + 1) < (-now_to_booked):
+        wavplayer.play_wav("e/is being delayed (old).wav")
+    else:
+        announce_delay_time(config, delay, wavplayer)
+
+    if config["general"]["voice"] != "Female2":
+        time.sleep(0.7)
+        wavplayer.play_wav("w/this train will set down only.wav")
+
+    if config["set_down_only_delay"]["please_listen_no_reason"]:
+        time.sleep(0.7)
+        wavplayer.play_wav("w/please listen for further announcements.wav")
+
+    if (
+        config["set_down_only_delay"][
+            "extremely_apologise_after_threshold"
+        ] > -1 and
+        delay >= config["set_down_only_delay"][
+            "extremely_apologise_after_threshold"
+        ] and
+        config["general"]["voice"] != "Female2"
+    ):
+        time.sleep(0.7)
+        wavplayer.play_wav(
+            "w/were extremely sorry for the severe delay to this service.wav"
+        )
+    elif (
+        config["set_down_only_delay"]["apologise_after_threshold"] > -1 and
+        delay >= config["set_down_only_delay"]["apologise_after_threshold"]
     ):
         time.sleep(0.7)
         if config["general"]["voice"] == "Female2":
@@ -3484,6 +3904,37 @@ def announce_arrival_platform_alteration(
     time.sleep(config["general"]["announcement_delay"])
 
 
+def announce_set_down_only_platform_alteration(
+    config: dict,
+    service: dict,
+    train_content: dict,
+    origins: list[str],
+    now: datetime.datetime,
+    wavplayer: WavPlayer
+) -> None:
+    logging.info("Platform alteration")
+
+    play_chime(config, config["set_down_only_platform_alteration"], wavplayer)
+
+    announce_arrival_platform_alteration_intro(
+        config,
+        config["set_down_only_platform_alteration"],
+        service,
+        train_content,
+        origins,
+        True,
+        now,
+        wavplayer
+    )
+
+    if config["general"]["voice"] != "Female2":
+        time.sleep(0.7)
+        wavplayer.play_wav("w/this train will set down only.wav")
+
+    # after playing an announcement we want a gap to the next one
+    time.sleep(config["general"]["announcement_delay"])
+
+
 def announce_realtime_arrival_next_train_intro(
     config: dict,
     service: dict,
@@ -3554,6 +4005,86 @@ def announce_realtime_arrival_next_train_intro(
             announce_destinations(origins, True, wavplayer)
 
 
+def announce_realtime_set_down_only_next_train_intro(
+    config: dict,
+    service: dict,
+    train_content: dict,
+    origins: list[str],
+    platform_alteration: bool,
+    now: datetime.datetime,
+    wavplayer: WavPlayer
+) -> None:
+    platform, plat_int, plat_letter = get_platform_and_int(service)
+
+    to_arrive = (
+        "to arrive " if config["set_down_only_next_train"]["to_arrive"] else ""
+    )
+    passengers = (
+        "passengers " if
+        config["set_down_only_next_train"]["passengers"] else
+        ""
+    )
+
+    logging.info("Approaching station realtime")
+
+    play_chime(config, config["set_down_only_next_train"], wavplayer)
+
+    if (
+        platform_alteration and
+        config["set_down_only_next_train"]["platform_alterations"]
+    ):
+        announce_arrival_platform_alteration_intro(
+            config,
+            config["set_down_only_next_train"],
+            service,
+            train_content,
+            origins,
+            True,
+            now,
+            wavplayer
+        )
+    elif platform:
+        if (plat_int is None and (
+            platform not in ("a", "b") or to_arrive
+        )) or (
+            plat_int is not None and (
+                plat_int > 12 or
+                plat_int < 1 or
+                str(plat_int) != platform
+            )
+        ):
+            wavplayer.play_wav(f"s/the next train {to_arrive}at platform.wav")
+            announce_platform_number(config, service, False, wavplayer)
+        else:
+            wavplayer.play_wav(
+                f"s/the next train {to_arrive}at platform {platform}.wav"
+            )
+
+        time.sleep(0.3)
+        wavplayer.play_wav(f"e/stops here to set down {passengers}only.wav")
+        if config["set_down_only_next_train"]["service_from"]:
+            time.sleep(0.7)
+            wavplayer.play_wav("s/this train is the service from.wav")
+            announce_destinations(origins, True, wavplayer)
+    else:
+        if to_arrive:
+            wavplayer.play_wav("s/the next train to arrive at.wav")
+            wavplayer.play_wav("m/this station.wav")
+            time.sleep(0.3)
+            wavplayer.play_wav(
+                f"e/stops here to set down {passengers}only.wav"
+            )
+        else:
+            wavplayer.play_wav("s/the next train.wav")
+            wavplayer.play_wav(
+                f"e/stops here to set down {passengers}only.wav"
+            )
+        if config["set_down_only_next_train"]["service_from"]:
+            time.sleep(0.7)
+            wavplayer.play_wav("s/this train is the service from.wav")
+            announce_destinations(origins, True, wavplayer)
+
+
 def announce_realtime_arrival_trust_triggered_intro(
     config: dict,
     service: dict,
@@ -3612,6 +4143,71 @@ def announce_realtime_arrival_trust_triggered_intro(
             announce_destinations(origins, True, wavplayer)
 
 
+def announce_realtime_set_down_only_trust_triggered_intro(
+    config: dict,
+    service: dict,
+    train_content: dict,
+    origins: list[str],
+    platform_alteration: bool,
+    now: datetime.datetime,
+    wavplayer: WavPlayer
+) -> None:
+    platform, plat_int, plat_letter = get_platform_and_int(service)
+
+    passengers = (
+        "passengers " if
+        config["set_down_only_next_train"]["passengers"] else
+        ""
+    )
+
+    logging.info("TRUST triggered")
+
+    play_chime(config, config["set_down_only_trust_triggered"], wavplayer)
+
+    if (
+        platform_alteration and
+        config["set_down_only_trust_triggered"]["platform_alterations"]
+    ):
+        announce_arrival_platform_alteration_intro(
+            config,
+            config["set_down_only_trust_triggered"],
+            service,
+            train_content,
+            origins,
+            True,
+            now,
+            wavplayer
+        )
+    elif platform:
+        if (plat_int is None and platform not in ("a", "b")) or (
+            plat_int is not None and (
+                plat_int > 12 or
+                plat_int < 1 or
+                str(plat_int) != platform
+            )
+        ):
+            wavplayer.play_wav(f"s/the next train at platform.wav")
+            announce_platform_number(config, service, False, wavplayer)
+        else:
+            wavplayer.play_wav(
+                f"s/the next train at platform {platform}.wav"
+            )
+
+        time.sleep(0.3)
+        wavplayer.play_wav(f"e/stops here to set down {passengers}only.wav")
+        if config["set_down_only_trust_triggered"]["service_from"]:
+            time.sleep(0.7)
+            wavplayer.play_wav("s/this train is the service from.wav")
+            announce_destinations(origins, True, wavplayer)
+    else:
+        wavplayer.play_wav("s/the next train.wav")
+        wavplayer.play_wav(f"e/stops here to set down {passengers}only.wav")
+        if config["set_down_only_trust_triggered"]["service_from"]:
+            time.sleep(0.7)
+            wavplayer.play_wav("s/this train is the service from.wav")
+            announce_destinations(origins, True, wavplayer)
+
+
 def announce_realtime_arrival_now_approaching_intro(
     config: dict,
     service: dict,
@@ -3663,6 +4259,71 @@ def announce_realtime_arrival_now_approaching_intro(
     else:
         wavplayer.play_wav("s/the train now approaching terminates here.wav")
         if config["arrivals_now_approaching"]["service_from"]:
+            time.sleep(0.7)
+            wavplayer.play_wav("s/this train is the service from.wav")
+            announce_destinations(origins, True, wavplayer)
+
+
+def announce_realtime_set_down_only_now_approaching_intro(
+    config: dict,
+    service: dict,
+    train_content: dict,
+    origins: list[str],
+    platform_alteration: bool,
+    now: datetime.datetime,
+    wavplayer: WavPlayer
+) -> None:
+    platform, plat_int, plat_letter = get_platform_and_int(service)
+
+    passengers = (
+        "passengers " if
+        config["set_down_only_next_train"]["passengers"] else
+        ""
+    )
+
+    logging.info("Approaching platform realtime")
+
+    play_chime(config, config["set_down_only_now_approaching"], wavplayer)
+
+    if (
+        platform_alteration and
+        config["set_down_only_now_approaching"]["platform_alterations"]
+    ):
+        announce_arrival_platform_alteration_intro(
+            config,
+            config["set_down_only_now_approaching"],
+            service,
+            train_content,
+            origins,
+            True,
+            now,
+            wavplayer
+        )
+    elif platform:
+        if (
+            plat_int is None or
+            plat_int > 20 or
+            plat_int < 1 or
+            str(plat_int) != platform
+        ):
+            wavplayer.play_wav("s/the train now approaching platform.wav")
+            announce_platform_number(config, service, False, wavplayer)
+        else:
+            wavplayer.play_wav(
+                f"s/the train now approaching platform {platform}.wav"
+            )
+
+        wavplayer.play_wav(f"e/stops here to set down {passengers}only.wav")
+        if config["set_down_only_now_approaching"]["service_from"]:
+            time.sleep(0.7)
+            wavplayer.play_wav("s/this train is the service from.wav")
+            announce_destinations(origins, True, wavplayer)
+    else:
+        wavplayer.play_wav(
+            "s/the train now approaching stops here to set down.wav"
+        )
+        wavplayer.play_wav(f"e/{passengers}only.wav")
+        if config["set_down_only_now_approaching"]["service_from"]:
             time.sleep(0.7)
             wavplayer.play_wav("s/this train is the service from.wav")
             announce_destinations(origins, True, wavplayer)
@@ -3749,6 +4410,74 @@ def announce_realtime_arrival_now_standing_intro(
             announce_destinations(origins, True, wavplayer)
 
 
+def announce_realtime_set_down_only_now_standing_intro(
+    config: dict,
+    service: dict,
+    train_content: dict,
+    origins: list[str],
+    platform_alteration: bool,
+    now: datetime.datetime,
+    wavplayer: WavPlayer
+) -> None:
+    platform, plat_int, plat_letter = get_platform_and_int(service)
+
+    passengers = (
+        "passengers " if
+        config["set_down_only_next_train"]["passengers"] else
+        ""
+    )
+
+    logging.info("At platform realtime")
+
+    play_chime(config, config["set_down_only_now_standing"], wavplayer)
+
+    announce_this_is(
+        config,
+        config["set_down_only_now_standing"],
+        service,
+        wavplayer
+    )
+
+    for i in range(config["set_down_only_now_standing"]["stand_clear"]):
+        wavplayer.play_wav("w/please stand clear.wav")
+        time.sleep(0.3)
+        wavplayer.play_wav(
+            "w/this train is stopping to set down passengers only.wav"
+        )
+        time.sleep(0.7)
+
+    if (
+        platform_alteration and
+        config["set_down_only_now_standing"]["platform_alterations"]
+    ):
+        announce_arrival_platform_alteration_intro(
+            config,
+            config["set_down_only_now_standing"],
+            service,
+            train_content,
+            origins,
+            True,
+            now,
+            wavplayer
+        )
+    elif platform:
+        wavplayer.play_wav("s/the train now standing at platform.wav")
+        announce_platform_number(config, service, False, wavplayer)
+        wavplayer.play_wav(f"e/stops here to set down {passengers}only.wav")
+        if config["set_down_only_now_standing"]["service_from"]:
+            time.sleep(0.7)
+            wavplayer.play_wav("s/this train is the service from.wav")
+            announce_destinations(origins, True, wavplayer)
+
+    else:
+        wavplayer.play_wav("s/the train now standing at this station.wav")
+        wavplayer.play_wav(f"e/stops here to set down {passengers}only.wav")
+        if config["set_down_only_now_standing"]["service_from"]:
+            time.sleep(0.7)
+            wavplayer.play_wav("s/this train is the service from.wav")
+            announce_destinations(origins, True, wavplayer)
+
+
 def announce_realtime_arrival(
     config: dict,
     service: dict,
@@ -3809,6 +4538,66 @@ def announce_realtime_arrival(
     time.sleep(config["general"]["announcement_delay"])
 
 
+def announce_realtime_set_down_only(
+    config: dict,
+    service: dict,
+    train_content: dict,
+    origins: list[str],
+    platform_alteration: bool,
+    now: datetime.datetime,
+    wavplayer: WavPlayer
+) -> None:
+    service_location = service["locationDetail"].get("serviceLocation")
+
+    logging.info("Doing set down only")
+    if service_location == "APPR_STAT":
+        announce_realtime_set_down_only_next_train_intro(
+            config,
+            service,
+            train_content,
+            origins,
+            platform_alteration,
+            now,
+            wavplayer
+        )
+        sub_config = config["set_down_only_next_train"]
+
+    elif service_location == "APPR_PLAT":
+        announce_realtime_set_down_only_now_approaching_intro(
+            config,
+            service,
+            train_content,
+            origins,
+            platform_alteration,
+            now,
+            wavplayer
+        )
+        sub_config = config["set_down_only_now_approaching"]
+
+    else:
+        announce_realtime_set_down_only_now_standing_intro(
+            config,
+            service,
+            train_content,
+            origins,
+            platform_alteration,
+            now,
+            wavplayer
+        )
+        sub_config = config["set_down_only_now_standing"]
+
+    passengers = "passengers " if sub_config["passengers"] else ""
+
+    if sub_config["repeat_sets_down"]:
+        time.sleep(0.7)
+        wavplayer.play_wav(
+            f"w/this train stops here to set down {passengers}only.wav"
+        )
+
+    # after playing an announcement we want a gap to the next one
+    time.sleep(config["general"]["announcement_delay"])
+
+
 def announce_realtime_arrival_trust_triggered(
     config: dict,
     service: dict,
@@ -3836,6 +4625,38 @@ def announce_realtime_arrival_trust_triggered(
     if sub_config["repeat_terminates"]:
         time.sleep(0.7)
         wavplayer.play_wav("w/this train terminates here.wav")
+
+    # after playing an announcement we want a gap to the next one
+    time.sleep(config["general"]["announcement_delay"])
+
+
+def announce_realtime_set_down_only_trust_triggered(
+    config: dict,
+    service: dict,
+    train_content: dict,
+    origins: list[str],
+    platform_alteration: bool,
+    now: datetime.datetime,
+    wavplayer: WavPlayer
+) -> None:
+    announce_realtime_set_down_only_trust_triggered_intro(
+        config,
+        service,
+        train_content,
+        origins,
+        platform_alteration,
+        now,
+        wavplayer
+    )
+    sub_config = config["set_down_only_trust_triggered"]
+
+    passengers = "passengers " if sub_config["passengers"] else ""
+
+    if sub_config["repeat_sets_down"]:
+        time.sleep(0.7)
+        wavplayer.play_wav(
+            f"w/this train stops here to set down {passengers}only.wav"
+        )
 
     # after playing an announcement we want a gap to the next one
     time.sleep(config["general"]["announcement_delay"])
@@ -4554,6 +5375,7 @@ def announce_realtime(
     wavplayer: WavPlayer
 ) -> None:
     display_as = service["locationDetail"]["displayAs"]
+    gbtt_departure = service["locationDetail"].get("gbttBookedDeparture")
 
     if (
         display_as in ("DESTINATION", "TERMINATES") and
@@ -4568,7 +5390,7 @@ def announce_realtime(
             now,
             wavplayer
         )
-    else:
+    elif gbtt_departure:
         announce_realtime_departure(
             config,
             service,
@@ -4581,6 +5403,16 @@ def announce_realtime(
             platform_alteration,
             now,
             repeat,
+            wavplayer
+        )
+    else:
+        announce_realtime_set_down_only(
+            config,
+            service,
+            train_content,
+            origins,
+            platform_alteration,
+            now,
             wavplayer
         )
 
@@ -4600,6 +5432,7 @@ def announce_realtime_trust_triggered(
     wavplayer: WavPlayer
 ) -> None:
     display_as = service["locationDetail"]["displayAs"]
+    gbtt_departure = service["locationDetail"].get("gbttBookedDeparture")
 
     if (
         display_as in ("DESTINATION", "TERMINATES") and
@@ -4614,7 +5447,7 @@ def announce_realtime_trust_triggered(
             now,
             wavplayer
         )
-    else:
+    elif gbtt_departure:
         announce_realtime_departure_trust_triggered(
             config,
             service,
@@ -4627,6 +5460,16 @@ def announce_realtime_trust_triggered(
             platform_alteration,
             now,
             repeat,
+            wavplayer
+        )
+    else:
+        announce_realtime_set_down_only_trust_triggered(
+            config,
+            service,
+            train_content,
+            origins,
+            platform_alteration,
+            now,
             wavplayer
         )
 
@@ -4737,6 +5580,13 @@ def announce_services(
             now
         )
 
+        should_do_set_down_only_delay = should_announce_set_down_only_delay(
+            config,
+            service,
+            service_last_announcement,
+            now
+        )
+
         should_do_cancellation = should_announce_cancellation(
             config,
             service,
@@ -4770,8 +5620,23 @@ def announce_services(
             )
         )
 
+        (
+            is_set_down_only_platform_alteration,
+            should_do_set_down_only_platform_alteration
+        ) = (
+            should_announce_set_down_only_platform_alteration(
+                config,
+                service,
+                service_last_announcement,
+                now,
+                services
+            )
+        )
+
         platform_alteration = (
-            is_departure_platform_alteration or is_arrival_platform_alteration
+            is_departure_platform_alteration or
+            is_arrival_platform_alteration or
+            is_set_down_only_platform_alteration
         )
 
         if platform_alteration:
@@ -4832,6 +5697,7 @@ def announce_services(
         if not (
             should_do_departure_delay or
             should_do_arrival_delay or
+            should_do_set_down_only_delay or
             should_do_realtime or
             should_do_realtime_repeat or
             should_do_realtime_trust_triggered or
@@ -4839,6 +5705,7 @@ def announce_services(
             should_do_departure_bus or
             should_do_departure_platform_alteration or
             should_do_arrival_platform_alteration or
+            should_do_set_down_only_platform_alteration or
             should_do_cancellation
         ):
             continue
@@ -4897,6 +5764,16 @@ def announce_services(
                 wavplayer
             )
 
+        if should_do_set_down_only_delay:
+            announce_set_down_only_delay(
+                config,
+                service,
+                train_content,
+                origins,
+                now,
+                wavplayer
+            )
+
         if should_do_departure_bus:
             announce_departure_bus(
                 config,
@@ -4917,6 +5794,16 @@ def announce_services(
 
         if should_do_arrival_platform_alteration:
             announce_arrival_platform_alteration(
+                config,
+                service,
+                train_content,
+                origins,
+                now,
+                wavplayer
+            )
+
+        if should_do_set_down_only_platform_alteration:
+            announce_set_down_only_platform_alteration(
                 config,
                 service,
                 train_content,
