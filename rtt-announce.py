@@ -6,8 +6,8 @@ import json
 import logging
 import os
 import pprint
-import pyaudio
 import requests
+import sounddevice
 import soundfile
 import sys
 import time
@@ -1101,14 +1101,14 @@ cancel_map = {
 class WavPlayer:
     def __init__(self, config: dict):
         self.last_played = None
-        self.audio = pyaudio.PyAudio()
+        self.audio = sounddevice
         self.config = config
-        self.stream = self.audio.open(
-            format = self.audio.get_format_from_width(1),
+        self.stream = self.audio.OutputStream(
             channels = 1,
-            rate = 16000,
-            output = True
+            samplerate = 16000,
+            dtype = 'float32',
         )
+        self.stream.start()
 
 
     def play_wav(self, file: str, play_last: bool = True) -> None:
@@ -1118,15 +1118,12 @@ class WavPlayer:
         )
         try:
             logging.info(os.path.join(path, file))
-            data, rate = soundfile.read(os.path.join(path, file))
-            data2 = bytearray()
-            for i, x in enumerate(data):
-                try:
-                    data2.append(int((x + 1.0) * 128))
-                except:
-                    logging.info(x, exc_info=1)
+            data, rate = soundfile.read(
+                os.path.join(path, file),
+                dtype='float32'
+            )
 
-            self.stream.write(bytes(data2))
+            self.stream.write(data)
 
             self.last_played = file
         except:
